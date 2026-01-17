@@ -22,10 +22,11 @@ These fields represent the **currently selected** vehicle:
 *   `odometer`: Total distance driven.
 
 ### 1.3 Location & Environment
-*   `latitude`, `longitude`: Current GPS position.
+*   `latitude`, `longitude`, `heading`: Current GPS position.
 *   `location_address`: Reverse-geocoded address (added by Backend).
 *   `outside_temp`: From Telemetry or Open-Meteo.
 *   `inside_temp`: Cabin temperature.
+*   `ignition_status`: On/Off status.
 *   `weather_code`: Weather condition code (for UI icons).
 *   `pet_mode`, `camp_mode`: Boolean status for special modes.
 
@@ -39,7 +40,7 @@ These fields represent the **currently selected** vehicle:
 ### 1.5 System Information
 *   `firmware_version`: FOTA version.
 *   `tbox_version`: Telematics box version.
-*   `bms_version`, `mhu_version`: ECU Versions.
+*   `bms_version`, `gateway_version`, `mhu_version`, `vcu_version`, `bcm_version`: Core ECU Versions.
 *   `service_alert`: Service due indicator.
 
 ## 2. State Flow
