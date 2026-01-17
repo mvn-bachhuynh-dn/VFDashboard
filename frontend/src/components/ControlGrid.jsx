@@ -86,7 +86,11 @@ export default function ControlGrid() {
           {/* Outside Weather */}
           <WeatherRow
             label="Outside"
-            value={`${v.outside_temp || "--"}°C`}
+            value={
+              v.outside_temp !== undefined && v.outside_temp !== null
+                ? `${v.outside_temp}°C`
+                : "N/A"
+            }
             subValue="Live"
             icon={
               <svg
@@ -111,9 +115,9 @@ export default function ControlGrid() {
             value={
               v.inside_temp !== undefined && v.inside_temp !== null
                 ? `${v.inside_temp}°C`
-                : "--"
+                : "N/A"
             }
-            subValue={`Fan: ${v.fan_speed !== undefined && v.fan_speed !== null ? v.fan_speed : "--"}`}
+            subValue={`Fan: ${v.fan_speed !== undefined && v.fan_speed !== null ? v.fan_speed : "N/A"}`}
             icon={
               <svg
                 className="w-6 h-6"

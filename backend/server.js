@@ -30,6 +30,7 @@ fastify.get("/health", async () => {
 });
 
 // Login
+// Login
 fastify.post(
   "/api/login",
   {
@@ -53,7 +54,16 @@ fastify.post(
       // Fetch vehicles immediately to get VIN and UserID
       // This is needed because `authenticate` only gets tokens
       // And we need VIN for the session cookie
-      await api.getVehicles();
+      try {
+        await api.getVehicles();
+      } catch (vehErr) {
+        request.log.error(vehErr);
+        // If getting vehicles fails, we still might be "logged in" but unusable.
+        // For now, treat as login failure or return specific error?
+        // Let's log it and fail the login process for safety.
+        console.error("Login succeeded but getVehicles failed:", vehErr);
+        throw new Error("Failed to retrieve vehicle data");
+      }
 
       const cookieOptions = {
         path: "/",
@@ -77,10 +87,32 @@ fastify.post(
     } catch (err) {
       request.log.error(err);
       // Return valid generic message for Production security
+      // But verify if it was a vehicle fetch error
+      if (err.message === "Failed to retrieve vehicle data") {
+        return reply.code(502).send({ error: "Login successful but failed to load profile." });
+      }
       return reply.code(401).send({ error: "Invalid email or password." });
     }
   },
 );
+
+// Logout
+fastify.post("/api/logout", async (request, reply) => {
+  const cookieOptions = {
+    path: "/",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  };
+
+  reply.clearCookie("access_token", cookieOptions);
+  reply.clearCookie("refresh_token", cookieOptions);
+  reply.clearCookie("vin", cookieOptions);
+  reply.clearCookie("user_id", cookieOptions);
+  reply.clearCookie("region", cookieOptions);
+
+  return { success: true };
+});
 
 // Middleware helper to recreate API from cookie
 const getAuthenticatedApi = (request) => {
