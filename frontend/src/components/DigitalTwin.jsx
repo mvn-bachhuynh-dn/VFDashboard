@@ -1,6 +1,6 @@
 import React from "react";
 import { useStore } from "@nanostores/react";
-import { vehicleStore } from "../stores/vehicleStore";
+import { vehicleStore, switchVehicle } from "../stores/vehicleStore";
 import { TIRE_PRESSURE, TEMPERATURE, GEARS } from "../constants/vehicle";
 
 // Tire Pressure Card - Polished Visuals with Full Labels
@@ -27,6 +27,9 @@ const TireCard = ({ pressure, temp, label, positionClass }) => {
   const limitPressureLow = TIRE_PRESSURE.LIMIT_LOW;
   const limitPressureHigh = TIRE_PRESSURE.LIMIT_HIGH;
   const limitTempHigh = TEMPERATURE.LIMIT_HIGH;
+
+  // HIDE BUBBLE IF NO DATA
+  if (!hasData) return null;
 
   // We check raw converted value for warning logic
   const numericPressure = hasData ? Number(displayPressure) : null;
@@ -115,7 +118,38 @@ export default function DigitalTwin() {
     if (imgRef.current && imgRef.current.complete) {
       setImageLoaded(true);
     }
-  }, []);
+  }, [data.vin]); // Reset load state on VIN change if needed, though react keying might be better
+
+  // Multi-Vehicle Logic
+  const allVehicles = data.vehicles || [];
+  const currentIndex = allVehicles.findIndex((v) => v.vinCode === data.vin);
+  const hasMultipleVehicles = allVehicles.length > 1;
+
+  const handleSwitch = (offset) => {
+    if (!hasMultipleVehicles) return;
+    const newIndex =
+      (currentIndex + offset + allVehicles.length) % allVehicles.length;
+    switchVehicle(allVehicles[newIndex].vinCode);
+  };
+
+  // Image Logic
+  const getCarImage = () => {
+    // 1. Prefer API provided image
+    if (data.vehicleImage) return data.vehicleImage;
+
+    // 2. Fallback to model-based local assets
+    const model = (data.marketingName || data.model || "").toUpperCase();
+    if (model.includes("VF 3")) return "/vf3-iso.png";
+    if (model.includes("VF 5")) return "/vf5-iso.png";
+    if (model.includes("VF 6")) return "/vf6-iso.png";
+    if (model.includes("VF 7")) return "/vf7-iso.png";
+    if (model.includes("VF 8")) return "/vf8-iso.png";
+
+    // NO Default Fallback
+    return null;
+  };
+
+  const carImageSrc = getCarImage();
 
   // Collect active warnings
   const warnings = [];
@@ -133,7 +167,7 @@ export default function DigitalTwin() {
         <div className="absolute top-4 md:top-6 left-4 md:left-8 z-10 flex flex-col">
           <h2 className="text-xl font-black text-gray-900 tracking-wide uppercase leading-none mb-2">
             {data.vin ? (
-              data.customizedVehicleName || "VF 9 PLUS"
+              data.customizedVehicleName || data.model || "VINFAST"
             ) : (
               <div className="h-6 w-32 bg-gray-200 animate-pulse rounded"></div>
             )}
@@ -144,10 +178,12 @@ export default function DigitalTwin() {
             <div className="flex items-baseline gap-1">
               {data.vin ? (
                 <>
-                  <span className="text-lg font-bold text-gray-700 leading-none">
+                  <span
+                    className={`text-lg font-bold leading-none ${data.odometer != null ? "text-gray-700" : "text-gray-300"}`}
+                  >
                     {data.odometer !== undefined && data.odometer !== null
                       ? Number(data.odometer).toLocaleString()
-                      : "--"}
+                      : "N/A"}
                   </span>
                   <span className="text-[10px] font-bold text-gray-400 uppercase">
                     km
@@ -165,42 +201,119 @@ export default function DigitalTwin() {
               Warranty Expires
             </p>
             <div className="flex items-center gap-2 text-xs font-bold text-gray-600 font-mono">
-              <span>
+              <span
+                className={
+                  !data.warrantyExpirationDate ? "text-gray-300" : ""
+                }
+              >
                 {data.warrantyExpirationDate
                   ? new Date(data.warrantyExpirationDate).toLocaleDateString(
-                      "vi-VN",
-                    )
-                  : "--"}
+                    "vi-VN",
+                  )
+                  : "N/A"}
               </span>
               <span className="text-gray-300">|</span>
-              <span>
+              <span className={!data.warrantyMileage ? "text-gray-300" : ""}>
                 {data.warrantyMileage
                   ? `${Number(data.warrantyMileage).toLocaleString()} km`
-                  : "--"}
+                  : "N/A"}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Car Image */}
-        {/* Car Image with Skeleton */}
-        <div className="relative w-full max-w-[520px] aspect-[16/10] flex items-center justify-center mt-14 md:mt-4">
+        {/* Car Image Area */}
+        <div className="relative w-full max-w-[520px] aspect-[16/10] flex items-center justify-center mt-14 md:mt-4 group">
+
+          {/* Controls Container - Full width to position elements */}
+          {hasMultipleVehicles && (
+            <>
+              {/* Left Arrow */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 z-30 px-2">
+                {currentIndex > 0 && (
+                  <button
+                    onClick={() => switchVehicle(allVehicles[currentIndex - 1].vinCode)}
+                    className="p-3 rounded-full bg-white/80 backdrop-blur-sm border border-gray-100 shadow-lg text-gray-400 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"
+                    title="Previous Vehicle"
+                  >
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2.5"
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Right Arrow */}
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 z-30 px-2">
+                {currentIndex < allVehicles.length - 1 && (
+                  <button
+                    onClick={() => switchVehicle(allVehicles[currentIndex + 1].vinCode)}
+                    className="p-3 rounded-full bg-white/80 backdrop-blur-sm border border-gray-100 shadow-lg text-gray-400 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"
+                    title="Next Vehicle"
+                  >
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2.5"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Pagination Dots */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-30">
+                {allVehicles.map((v, idx) => (
+                  <button
+                    key={v.vinCode}
+                    onClick={() => switchVehicle(v.vinCode)}
+                    className={`transition-all duration-300 rounded-full ${idx === currentIndex
+                      ? "w-6 h-1.5 bg-gray-800"
+                      : "w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400"
+                      }`}
+                    title={v.customizedVehicleName || v.vehicleName || "Vehicle"}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
           {/* Skeleton */}
           <div
-            className={`absolute inset-0 bg-gray-100 rounded-2xl animate-pulse ${imageLoaded ? "hidden" : "block"}`}
+            className={`absolute inset-0 bg-gray-100/50 rounded-2xl animate-pulse ${imageLoaded || !carImageSrc ? "hidden" : "block"}`}
           ></div>
-          <img
-            ref={imgRef}
-            src="/vf9-iso-green.png"
-            alt="VF9 Isometric"
-            className={`w-full h-full object-contain drop-shadow-2xl z-10 scale-105 transition-opacity duration-500 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
-            onLoad={() => setImageLoaded(true)}
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = "/vf9-interior.png";
-              setImageLoaded(true);
-            }}
-          />
+
+          {carImageSrc && (
+            <img
+              ref={imgRef}
+              src={carImageSrc}
+              alt="Vehicle Isometric"
+              className={`w-full h-full object-contain drop-shadow-2xl z-10 scale-105 transition-opacity duration-500 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+              onLoad={() => setImageLoaded(true)}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.style.display = 'none';
+                setImageLoaded(true);
+              }}
+            />
+          )}
         </div>
 
         {/* Tire Cards */}
@@ -245,9 +358,9 @@ export default function DigitalTwin() {
             <span className="bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
               {data.warrantyExpirationDate
                 ? new Date(data.warrantyExpirationDate).toLocaleDateString(
-                    "en-US",
-                    { month: "short", year: "numeric" },
-                  )
+                  "en-US",
+                  { month: "short", year: "numeric" },
+                )
                 : "--"}
             </span>
             <span className="text-gray-300">•</span>

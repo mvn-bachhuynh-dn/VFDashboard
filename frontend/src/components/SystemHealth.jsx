@@ -182,7 +182,10 @@ export default function SystemHealth() {
     },
     {
       label: VEHICLE_STATUS_LABELS.FIRMWARE,
-      value: data.firmware_version || "--",
+      value:
+        data.firmware_version && data.firmware_version !== "--"
+          ? data.firmware_version
+          : "N/A",
       bg: "bg-gray-50",
       txt: "text-gray-600",
       icon: "chip",
@@ -190,7 +193,10 @@ export default function SystemHealth() {
     },
     {
       label: VEHICLE_STATUS_LABELS.TBOX,
-      value: data.tbox_version || "--",
+      value:
+        data.tbox_version && data.tbox_version !== "--"
+          ? data.tbox_version
+          : "N/A",
       bg: "bg-gray-50",
       txt: "text-gray-600",
       icon: "wifi",

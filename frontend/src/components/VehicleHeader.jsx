@@ -122,7 +122,7 @@ const WeatherIcon = ({ temp, code }) => {
     <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
       {icon}
       <span className="text-sm font-bold text-blue-700">
-        {temp !== null && temp !== undefined ? `${temp}°C` : "--"}
+        {temp !== null && temp !== undefined ? `${temp}°C` : "N/A"}
       </span>
     </div>
   );
@@ -135,8 +135,15 @@ export default function VehicleHeader() {
     fetchTelemetry(vehicle.vin);
   };
 
-  const handleLogout = () => {
-    // Simple logout for demo: redirect to login
+  const handleLogout = async () => {
+    try {
+      await fetch(`${import.meta.env.PUBLIC_API_URL || "http://localhost:3000"}/api/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e) {
+      console.error("Logout failed", e);
+    }
     window.location.href = "/login";
   };
 
@@ -151,6 +158,8 @@ export default function VehicleHeader() {
           minute: "2-digit",
         }),
       );
+    } else {
+      setLastUpdatedTime("N/A");
     }
   }, [vehicle.lastUpdated]);
 
@@ -286,10 +295,10 @@ export default function VehicleHeader() {
             <p className="text-xs text-gray-400 mt-0.5 font-medium tracking-wide">
               {vehicle.userVehicleType
                 ? vehicle.userVehicleType
-                    .replace("ROLE_", "")
-                    .toLowerCase()
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase())
+                  .replace("ROLE_", "")
+                  .toLowerCase()
+                  .replace(/_/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase())
                 : ""}
             </p>
           </div>

@@ -97,8 +97,8 @@ export default function CarStatus() {
                         </span>
                       </>
                     ) : (
-                      <span className="animate-pulse text-xl font-bold text-gray-300">
-                        --
+                      <span className="text-3xl font-black text-gray-200 tracking-tighter leading-none">
+                        N/A
                       </span>
                     )}
                   </div>
@@ -131,10 +131,10 @@ export default function CarStatus() {
                       )}
                     </>
                   ) : (
-                    // Skeleton / Placeholder to hold space
-                    <div className="flex flex-col items-center justify-center h-full gap-1 opacity-0">
-                      <div className="h-2 w-10 bg-gray-100 rounded"></div>
-                      <div className="h-2 w-12 bg-gray-100 rounded"></div>
+                    <div className="flex flex-col items-center justify-center h-full gap-1">
+                      <span className="text-[8px] text-gray-300 font-bold uppercase tracking-wider">
+                        SERIAL: N/A
+                      </span>
                     </div>
                   )}
                 </div>
@@ -147,10 +147,14 @@ export default function CarStatus() {
                   <p className="text-blue-400 text-[8px] font-bold uppercase tracking-wider mb-0.5">
                     Est. Range
                   </p>
-                  <p className="text-xl font-black text-blue-600 leading-none">
-                    {data.range !== null ? data.range : "--"}{" "}
-                    <span className="text-[10px] font-bold text-blue-400">
-                      km
+                  <p
+                    className={`text-xl font-black leading-none ${data.range !== null ? "text-blue-600" : "text-gray-300"}`}
+                  >
+                    {data.range !== null ? data.range : "N/A"}{" "}
+                    <span
+                      className={`text-[10px] font-bold ${data.range !== null ? "text-blue-400" : "text-gray-300"}`}
+                    >
+                      {data.range !== null ? "km" : ""}
                     </span>
                   </p>
                 </div>
@@ -160,10 +164,12 @@ export default function CarStatus() {
                   <p className="text-gray-400 text-[8px] font-bold uppercase tracking-wider mb-0.5">
                     Health
                   </p>
-                  <p className="text-base font-black text-emerald-600 leading-none">
+                  <p
+                    className={`text-base font-black leading-none ${data.soh_percentage !== null ? "text-emerald-600" : "text-gray-300"}`}
+                  >
                     {data.soh_percentage !== null
                       ? `${data.soh_percentage}%`
-                      : "--"}
+                      : "N/A"}
                   </p>
                 </div>
 
@@ -177,11 +183,11 @@ export default function CarStatus() {
                     12V Batt
                   </p>
                   <p
-                    className={`text-base font-black leading-none ${typeof data.battery_health_12v === "number" && data.battery_health_12v < 50 ? "text-red-600" : "text-emerald-600"}`}
+                    className={`text-base font-black leading-none ${typeof data.battery_health_12v === "number" && data.battery_health_12v < 50 ? "text-red-600" : typeof data.battery_health_12v === "number" ? "text-emerald-600" : "text-gray-300"}`}
                   >
                     {typeof data.battery_health_12v === "number"
                       ? `${data.battery_health_12v}%`
-                      : "--"}
+                      : "N/A"}
                   </p>
                 </div>
               </div>
@@ -244,8 +250,10 @@ export default function CarStatus() {
                 Target
               </p>
               <div className="flex items-center justify-center">
-                <span className="text-base font-black text-gray-900 leading-none">
-                  {data.target_soc !== null ? `${data.target_soc}%` : "--"}
+                <span
+                  className={`text-base font-black leading-none ${data.target_soc !== null ? "text-gray-900" : "text-gray-300"}`}
+                >
+                  {data.target_soc !== null ? `${data.target_soc}%` : "N/A"}
                 </span>
               </div>
             </div>
@@ -258,10 +266,12 @@ export default function CarStatus() {
                 Time Left
               </p>
               <div className="flex items-center justify-center">
-                <span className="text-base font-black text-gray-900 leading-none whitespace-nowrap">
+                <span
+                  className={`text-base font-black leading-none whitespace-nowrap ${data.remaining_charging_time > 0 ? "text-gray-900" : "text-gray-300"}`}
+                >
                   {data.remaining_charging_time > 0
                     ? formatTime(data.remaining_charging_time)
-                    : "--"}
+                    : "N/A"}
                 </span>
               </div>
             </div>
