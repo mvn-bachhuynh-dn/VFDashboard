@@ -230,18 +230,14 @@ class VinFastAPI {
   async refreshAccessToken() {
     if (!this.refreshToken) return false;
 
-    const url = `https://${this.regionConfig.auth0_domain}/oauth/token`;
-    const payload = {
-      client_id: this.regionConfig.auth0_client_id,
-      grant_type: "refresh_token",
-      refresh_token: this.refreshToken,
-    };
-
     try {
-      const response = await fetch(url, {
+      const response = await fetch("/api/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          refresh_token: this.refreshToken,
+          region: this.region,
+        }),
       });
 
       if (response.ok) {
