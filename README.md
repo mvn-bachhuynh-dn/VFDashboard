@@ -2,13 +2,20 @@
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-23%2B-green)
-![Status](https://img.shields.io/badge/Status-Active-success)
+![Status](https://img.shields.io/badge/Status-Archived-yellow)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-> **A side project by tech enthusiasts of VF9 Club Vietnam.**  
-> Dedicated to exploring the digital capabilities of our vehicles and creating a premium, personalized monitoring experience.
+---
 
-🌐 **Official Dashboard**: [https://dashboard.vf9.club](https://dashboard.vf9.club)
+## 🌅 **Sunset Notice** (January 2026)
+
+> **This dashboard is no longer operational** due to VinFast's implementation of X-HASH authentication on their APIs.  
+> 
+> 🔒 **What happened?** VinFast implemented HMAC-SHA256 security requiring a secret key not available publicly.  
+> 📚 **All research preserved**: API documentation, analysis reports, and Postman collections remain available.  
+> 🎯 **For details**: See [SUNSET.md](./SUNSET.md) and [API Documentation](./docs/api/)
+
+**The code and documentation are preserved for educational purposes and future reference.**
 
 ---
 
