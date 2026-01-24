@@ -97,16 +97,16 @@ export default function Login({ bgImage }) {
               </div>
             </div>
           )}
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-8">
             {/* VinFast Logo */}
             <img
               src="/vinfast-logo.png"
               alt="VinFast"
-              className="h-10 object-contain"
+              className="h-12 object-contain"
             />
           </div>
 
-          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
                 <input
