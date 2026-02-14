@@ -8,7 +8,7 @@
 
 ## Overview
 
-VinFast Companion app sử dụng **461+ API endpoints** trên **26 namespaces**, giao tiếp qua OkHttp + Retrofit.
+VinFast Companion app uses **461+ API endpoints** across **26 namespaces**, communicating via OkHttp + Retrofit.
 
 ### Interceptor Chain (Request Pipeline)
 
@@ -29,205 +29,205 @@ Request → TokenInterceptor → CryptoInterceptor (X-HASH-2) → HMACIntercepto
 | Remote commands | Yes | Yes | Yes | Yes |
 | Charging | Yes | Yes | Yes | Yes |
 
-> *Server hiện tại không validate hash cho non-telemetry endpoints, nhưng app vẫn gửi cho mọi request qua VFServiceModule OkHttpClient.
+> *The server currently does not validate hashes for non-telemetry endpoints, but the app still sends them for every request through the VFServiceModule OkHttpClient.
 
 ### Platform Header Constraint
 
 | Header | Required Value | Scope |
 |--------|---------------|-------|
-| `x-device-platform` | `android` | **Tất cả endpoints** |
+| `x-device-platform` | `android` | **All endpoints** |
 
-> **CRITICAL:** Server validate `x-device-platform` header cho **tất cả** API endpoints, không chỉ telemetry. Giá trị `ios` hoặc bất kỳ giá trị tùy chỉnh nào đều bị reject với HTTP 401, kể cả `user-vehicle` (non-telemetry). Chỉ `android` được chấp nhận.
+> **CRITICAL:** The server validates the `x-device-platform` header for **all** API endpoints, not just telemetry. The value `ios` or any custom value will be rejected with HTTP 401, including `user-vehicle` (non-telemetry). Only `android` is accepted.
 >
-> **Lý do:** Tài liệu này dựa trên việc dịch ngược Android APK — nhanh và dễ hơn so với iOS. Secret key và signing algorithm cho iOS có thể khác và chưa được nghiên cứu.
+> **Reason:** This documentation is based on reverse-engineering the Android APK — faster and easier compared to iOS. The secret key and signing algorithm for iOS may differ and have not been researched.
 >
-> Các header khác như `x-device-family`, `x-device-os-version` không bị validate — có thể đặt giá trị tùy chỉnh.
+> Other headers such as `x-device-family`, `x-device-os-version` are not validated — custom values can be used.
 
 ---
 
 ## Namespaces Used by VFDashboard
 
-Các namespace mà dashboard hiện đang sử dụng hoặc có thể sử dụng:
+Namespaces that the dashboard currently uses or may use:
 
 ### 1. ccarusermgnt — User & Vehicle Management
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccarusermgnt/api/v1/user-vehicle` | Lấy danh sách xe của user |
-| GET | `/ccarusermgnt/api/v1/auth0/account/profile` | Lấy profile user |
-| PUT | `/ccarusermgnt/api/v1/auth0/account/profile` | Cập nhật profile |
-| GET | `/ccarusermgnt/api/v1/user-vehicle/driver` | Danh sách driver |
-| POST | `/ccarusermgnt/api/v1/auth0/account/alternative-contact/add-phone` | Thêm SĐT |
-| PUT | `/ccarusermgnt/api/v1/device-trust/fcm-token` | Đăng ký FCM push token |
-| PUT | `/ccarusermgnt/api/v1/device-trust/mark-logout` | Đánh dấu logout |
-| POST | `/ccarusermgnt/api/v1/user-vehicle/transfer-ownership` | Chuyển quyền sở hữu xe |
-| POST | `/ccarusermgnt/api/v1/consent/save` | Lưu consent |
-| GET | `/ccarusermgnt/api/v1/consent/latest` | Lấy consent mới nhất |
-| POST | `/ccarusermgnt/api/v1/auth0/account/delete` | Xóa tài khoản |
+| GET | `/ccarusermgnt/api/v1/user-vehicle` | Get user's vehicle list |
+| GET | `/ccarusermgnt/api/v1/auth0/account/profile` | Get user profile |
+| PUT | `/ccarusermgnt/api/v1/auth0/account/profile` | Update profile |
+| GET | `/ccarusermgnt/api/v1/user-vehicle/driver` | Driver list |
+| POST | `/ccarusermgnt/api/v1/auth0/account/alternative-contact/add-phone` | Add phone number |
+| PUT | `/ccarusermgnt/api/v1/device-trust/fcm-token` | Register FCM push token |
+| PUT | `/ccarusermgnt/api/v1/device-trust/mark-logout` | Mark logout |
+| POST | `/ccarusermgnt/api/v1/user-vehicle/transfer-ownership` | Transfer vehicle ownership |
+| POST | `/ccarusermgnt/api/v1/consent/save` | Save consent |
+| GET | `/ccarusermgnt/api/v1/consent/latest` | Get latest consent |
+| POST | `/ccarusermgnt/api/v1/auth0/account/delete` | Delete account |
 
 ### 2. modelmgmt — Vehicle Model Management
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/modelmgmt/api/v2/vehicle-model/mobile-app/vehicle/get-alias` | Lấy alias mapping (telemetry resource IDs) |
+| GET | `/modelmgmt/api/v2/vehicle-model/mobile-app/vehicle/get-alias` | Get alias mapping (telemetry resource IDs) |
 
-> **Quan trọng**: Endpoint này trả về mapping giữa alias name → objectId/instanceId/resourceId, dùng để build telemetry request body.
+> **Important**: This endpoint returns the mapping between alias name → objectId/instanceId/resourceId, used to build the telemetry request body.
 
 ### 3. ccaraccessmgmt — Vehicle Access & Telemetry
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/ccaraccessmgmt/api/v1/telemetry/app/ping` | **Telemetry chính** — lấy trạng thái xe real-time |
-| POST | `/ccaraccessmgmt/api/v1/telemetry/list_resource` | Liệt kê telemetry resources |
-| POST | `/ccaraccessmgmt/api/v2/remote/app/command` | Gửi remote command (khóa/mở xe, nháy đèn, bấm còi...) |
-| GET | `/ccaraccessmgmt/api/v1/geo_fencing/get` | Lấy geofence config |
-| POST | `/ccaraccessmgmt/api/v1/geo_fencing/set` | Thiết lập geofence |
-| DELETE | `/ccaraccessmgmt/api/v1/geo_fencing/delete` | Xóa geofence |
-| GET | `/ccaraccessmgmt/api/v1/vehicles/{vinCode}/parked-images` | Ảnh vị trí đỗ xe |
-| GET | `/ccaraccessmgmt/api/v1/time-fencing/get` | Lấy time fence |
-| POST | `/ccaraccessmgmt/api/v1/time-fencing/set` | Thiết lập time fence |
-| DELETE | `/ccaraccessmgmt/api/v1/time-fencing/delete` | Xóa time fence |
+| POST | `/ccaraccessmgmt/api/v1/telemetry/app/ping` | **Primary telemetry** — get real-time vehicle status |
+| POST | `/ccaraccessmgmt/api/v1/telemetry/list_resource` | List telemetry resources |
+| POST | `/ccaraccessmgmt/api/v2/remote/app/command` | Send remote command (lock/unlock, flash lights, honk horn...) |
+| GET | `/ccaraccessmgmt/api/v1/geo_fencing/get` | Get geofence config |
+| POST | `/ccaraccessmgmt/api/v1/geo_fencing/set` | Set geofence |
+| DELETE | `/ccaraccessmgmt/api/v1/geo_fencing/delete` | Delete geofence |
+| GET | `/ccaraccessmgmt/api/v1/vehicles/{vinCode}/parked-images` | Parked location photos |
+| GET | `/ccaraccessmgmt/api/v1/time-fencing/get` | Get time fence |
+| POST | `/ccaraccessmgmt/api/v1/time-fencing/set` | Set time fence |
+| DELETE | `/ccaraccessmgmt/api/v1/time-fencing/delete` | Delete time fence |
 
 ---
 
-## Các Namespaces Khác (Tham Khảo)
+## Other Namespaces (Reference)
 
 ### 4. ccarcharging — EV Charging
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/ccarcharging/api/v1/stations/search` | Tìm trạm sạc gần |
-| GET | `/ccarcharging/api/v1/stations/{stationId}` | Chi tiết trạm sạc |
-| GET | `/ccarcharging/api/v1/charging-history` | Lịch sử sạc |
-| GET | `/ccarcharging/api/v1/charging-sessions/current` | Phiên sạc hiện tại |
-| GET | `/ccarcharging/api/v1/charging-sessions/{sessionId}` | Chi tiết phiên sạc |
-| POST | `/ccarcharging/api/v1/charging/start` | Bắt đầu sạc |
-| POST | `/ccarcharging/api/v1/charging/stop` | Dừng sạc |
-| GET | `/ccarcharging/api/v1/subscription/registered` | Gói sạc đã đăng ký |
-| POST | `/ccarcharging/api/v1/subscription/register` | Đăng ký gói sạc |
-| POST | `/ccarcharging/api/v1/charging/rfid-cards` | Thêm thẻ RFID |
-| DELETE | `/ccarcharging/api/v1/charging/rfid-cards/{cardId}` | Xóa thẻ RFID |
-| GET | `/ccarcharging/api/v1/charging-settings` | Cài đặt sạc |
-| PUT | `/ccarcharging/api/v1/charging-settings` | Cập nhật cài đặt sạc |
-| POST | `/ccarcharging/api/v1/reserve-charging` | Đặt lịch sạc |
-| GET | `/ccarcharging/api/v1/battery-leasing` | Thông tin thuê pin |
-| POST | `/ccarcharging/api/v1/plug-and-charge/register` | Đăng ký Plug & Charge |
-| GET | `/ccarcharging/api/v1/plug-and-charge/status` | Trạng thái PnC |
+| POST | `/ccarcharging/api/v1/stations/search` | Search nearby charging stations |
+| GET | `/ccarcharging/api/v1/stations/{stationId}` | Charging station details |
+| GET | `/ccarcharging/api/v1/charging-history` | Charging history |
+| GET | `/ccarcharging/api/v1/charging-sessions/current` | Current charging session |
+| GET | `/ccarcharging/api/v1/charging-sessions/{sessionId}` | Charging session details |
+| POST | `/ccarcharging/api/v1/charging/start` | Start charging |
+| POST | `/ccarcharging/api/v1/charging/stop` | Stop charging |
+| GET | `/ccarcharging/api/v1/subscription/registered` | Registered charging plans |
+| POST | `/ccarcharging/api/v1/subscription/register` | Register charging plan |
+| POST | `/ccarcharging/api/v1/charging/rfid-cards` | Add RFID card |
+| DELETE | `/ccarcharging/api/v1/charging/rfid-cards/{cardId}` | Delete RFID card |
+| GET | `/ccarcharging/api/v1/charging-settings` | Charging settings |
+| PUT | `/ccarcharging/api/v1/charging-settings` | Update charging settings |
+| POST | `/ccarcharging/api/v1/reserve-charging` | Schedule charging |
+| GET | `/ccarcharging/api/v1/battery-leasing` | Battery leasing info |
+| POST | `/ccarcharging/api/v1/plug-and-charge/register` | Register Plug & Charge |
+| GET | `/ccarcharging/api/v1/plug-and-charge/status` | PnC status |
 
 ### 5. ccarpayment — Payment & Billing
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccarpayment/api/v1/payments/cards` | Danh sách thẻ thanh toán |
-| POST | `/ccarpayment/api/v1/payments/cards` | Thêm thẻ |
-| DELETE | `/ccarpayment/api/v1/payments/cards/{tokenNumber}` | Xóa thẻ |
-| GET | `/ccarpayment/api/v2/bills/{billId}` | Chi tiết hóa đơn |
-| GET | `/ccarpayment/api/v1/bills/list` | Danh sách hóa đơn |
-| POST | `/ccarpayment/api/v1/payments` | Thực hiện thanh toán |
-| POST | `/ccarpayment/api/v1/payments/auto-payment` | Thiết lập auto-pay |
-| GET | `/ccarpayment/api/v1/payments/auto-payment/status` | Trạng thái auto-pay |
-| POST | `/ccarpayment/api/v1/deposit` | Đặt cọc |
-| GET | `/ccarpayment/api/v1/virtual-account` | Tài khoản ảo |
+| GET | `/ccarpayment/api/v1/payments/cards` | Payment cards list |
+| POST | `/ccarpayment/api/v1/payments/cards` | Add card |
+| DELETE | `/ccarpayment/api/v1/payments/cards/{tokenNumber}` | Delete card |
+| GET | `/ccarpayment/api/v2/bills/{billId}` | Invoice details |
+| GET | `/ccarpayment/api/v1/bills/list` | Invoice list |
+| POST | `/ccarpayment/api/v1/payments` | Process payment |
+| POST | `/ccarpayment/api/v1/payments/auto-payment` | Set up auto-pay |
+| GET | `/ccarpayment/api/v1/payments/auto-payment/status` | Auto-pay status |
+| POST | `/ccarpayment/api/v1/deposit` | Deposit |
+| GET | `/ccarpayment/api/v1/virtual-account` | Virtual account |
 
 ### 6. ccar-sota — Software Updates
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccar-sota/api/v1/capp/package` | Danh sách gói phần mềm |
-| GET | `/ccar-sota/api/v1/capp/package/current-package` | Gói hiện tại |
-| POST | `/ccar-sota/api/v1/capp/package/subscribe` | Đăng ký gói |
-| GET | `/ccar-sota/api/v1/capp/voice/list` | Danh sách voice |
-| POST | `/ccar-sota/api/v1/capp/voice/create` | Tạo voice clone |
-| GET | `/ccar-sota/api/v1/capp/e-contract` | Hợp đồng điện tử |
-| POST | `/ccar-sota/api/v1/capp/e-contract/sign` | Ký hợp đồng |
+| GET | `/ccar-sota/api/v1/capp/package` | Software package list |
+| GET | `/ccar-sota/api/v1/capp/package/current-package` | Current package |
+| POST | `/ccar-sota/api/v1/capp/package/subscribe` | Subscribe to package |
+| GET | `/ccar-sota/api/v1/capp/voice/list` | Voice list |
+| POST | `/ccar-sota/api/v1/capp/voice/create` | Create voice clone |
+| GET | `/ccar-sota/api/v1/capp/e-contract` | Electronic contract |
+| POST | `/ccar-sota/api/v1/capp/e-contract/sign` | Sign contract |
 
 ### 7. ccarfota_v2 — Firmware Updates (FOTA)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccarfota_v2/api/v1/campaigns/check-firmware-update/{vinCode}` | Kiểm tra firmware mới |
-| GET | `/ccarfota_v2/api/v1/campaigns/{id}/next-action/{vinCode}` | Bước tiếp theo cho update |
-| GET | `/ccarfota_v2/api/v1/campaigns/{id}/terms-conditions/{key}` | Điều khoản cập nhật |
-| POST | `/ccarfota_v2/api/v1/campaigns/install-now` | Cài đặt ngay |
-| PUT | `/ccarfota_v2/api/v1/campaigns/start-download` | Bắt đầu tải |
+| GET | `/ccarfota_v2/api/v1/campaigns/check-firmware-update/{vinCode}` | Check for firmware updates |
+| GET | `/ccarfota_v2/api/v1/campaigns/{id}/next-action/{vinCode}` | Next action for update |
+| GET | `/ccarfota_v2/api/v1/campaigns/{id}/terms-conditions/{key}` | Update terms & conditions |
+| POST | `/ccarfota_v2/api/v1/campaigns/install-now` | Install now |
+| PUT | `/ccarfota_v2/api/v1/campaigns/start-download` | Start download |
 
 ### 8. notimgmt — Notifications
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/notimgmt/api/v1/notimgmt/history/category_list` | Danh mục thông báo |
-| GET | `/notimgmt/api/v1/notimgmt/users/app/is-unread` | Kiểm tra thông báo chưa đọc |
-| POST | `/notimgmt/api/v2/notimgmt/users/app/mark-notification` | Đánh dấu đã đọc |
-| GET | `/notimgmt/api/v2/notimgmt/users/mobile-app/noti-settings` | Cài đặt thông báo |
-| PUT | `/notimgmt/api/v2/notimgmt/users/mobile-app/noti-settings` | Cập nhật cài đặt |
+| GET | `/notimgmt/api/v1/notimgmt/history/category_list` | Notification categories |
+| GET | `/notimgmt/api/v1/notimgmt/users/app/is-unread` | Check unread notifications |
+| POST | `/notimgmt/api/v2/notimgmt/users/app/mark-notification` | Mark as read |
+| GET | `/notimgmt/api/v2/notimgmt/users/mobile-app/noti-settings` | Notification settings |
+| PUT | `/notimgmt/api/v2/notimgmt/users/mobile-app/noti-settings` | Update settings |
 
 ### 9. ccarbookingservice — Service Booking
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccarbookingservice/api/v1/c-app/appointment/get-list-upcoming` | Lịch hẹn sắp tới |
-| GET | `/ccarbookingservice/api/v1/c-app/showroom/get-list` | Danh sách showroom |
-| POST | `/ccarbookingservice/api/v1/c-app/appointment/create` | Đặt lịch hẹn |
-| PUT | `/ccarbookingservice/api/v1/c-app/appointment/update/{booking_id}` | Cập nhật lịch hẹn |
+| GET | `/ccarbookingservice/api/v1/c-app/appointment/get-list-upcoming` | Upcoming appointments |
+| GET | `/ccarbookingservice/api/v1/c-app/showroom/get-list` | Showroom list |
+| POST | `/ccarbookingservice/api/v1/c-app/appointment/create` | Create appointment |
+| PUT | `/ccarbookingservice/api/v1/c-app/appointment/update/{booking_id}` | Update appointment |
 
 ### 10. personalization — Personalization & Routines
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/personalization/api/capp/routines?type=CUSTOM` | Danh sách routine tùy chỉnh |
-| GET | `/personalization/api/capp/routines/{id}` | Chi tiết routine |
-| POST | `/personalization/api/capp/routines` | Tạo routine |
-| PUT | `/personalization/api/capp/routines/{id}` | Cập nhật routine |
-| DELETE | `/personalization/api/capp/routines/{id}` | Xóa routine |
-| GET | `/personalization/api/capp/settings` | Cài đặt cá nhân |
-| PUT | `/personalization/api/capp/settings` | Cập nhật cài đặt |
+| GET | `/personalization/api/capp/routines?type=CUSTOM` | Custom routines list |
+| GET | `/personalization/api/capp/routines/{id}` | Routine details |
+| POST | `/personalization/api/capp/routines` | Create routine |
+| PUT | `/personalization/api/capp/routines/{id}` | Update routine |
+| DELETE | `/personalization/api/capp/routines/{id}` | Delete routine |
+| GET | `/personalization/api/capp/settings` | Personal settings |
+| PUT | `/personalization/api/capp/settings` | Update settings |
 
 ### 11. ccarcontent — Content Management
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccarcontent/api/v1/car-model` | Danh sách mẫu xe |
-| GET | `/ccarcontent/api/v1/banner` | Banner quảng cáo |
-| GET | `/ccarcontent/api/v1/data-privacy` | Chính sách dữ liệu |
-| POST | `/ccarcontent/api/v1/sync` | Đồng bộ content |
+| GET | `/ccarcontent/api/v1/car-model` | Car model list |
+| GET | `/ccarcontent/api/v1/banner` | Advertisement banners |
+| GET | `/ccarcontent/api/v1/data-privacy` | Data privacy policy |
+| POST | `/ccarcontent/api/v1/sync` | Sync content |
 
 ### 12. ccarreferral — Referrals & Promotions
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccarreferral/api/v1/capp/promotions/list` | Danh sách khuyến mãi |
-| GET | `/ccarreferral/api/v1/capp/vouchers/detail/{code}` | Chi tiết voucher |
-| POST | `/ccarreferral/api/v1/capp/vouchers/redeem` | Đổi voucher |
+| GET | `/ccarreferral/api/v1/capp/promotions/list` | Promotions list |
+| GET | `/ccarreferral/api/v1/capp/vouchers/detail/{code}` | Voucher details |
+| POST | `/ccarreferral/api/v1/capp/vouchers/redeem` | Redeem voucher |
 
 ### 13. vfrsa — Roadside Assistance
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/vfrsa/api/c-app/rsa/info` | Thông tin cứu hộ |
-| POST | `/vfrsa/api/c-app/rsa` | Yêu cầu cứu hộ |
-| PUT | `/vfrsa/api/c-app/rsa/cancel/{subId}` | Hủy yêu cầu |
+| GET | `/vfrsa/api/c-app/rsa/info` | Roadside assistance info |
+| POST | `/vfrsa/api/c-app/rsa` | Request roadside assistance |
+| PUT | `/vfrsa/api/c-app/rsa/cancel/{subId}` | Cancel request |
 
 ### 14. Auth0 — Authentication
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/oauth/token` | Lấy/refresh access token |
-| POST | `/dbconnections/signup` | Đăng ký tài khoản |
-| POST | `/dbconnections/change_password` | Đổi mật khẩu |
+| POST | `/oauth/token` | Get/refresh access token |
+| POST | `/dbconnections/signup` | Register account |
+| POST | `/dbconnections/change_password` | Change password |
 
 ### 15. ccar-order-history — Order Management
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/ccar-order-history/api/v1/me/orders` | Danh sách đơn hàng |
-| POST | `/ccar-order-history/api/v1/orders/confirm-delivery-record` | Xác nhận giao xe |
-| PUT | `/ccar-order-history/api/v1/orders/{id}/delivery` | Cập nhật giao xe |
+| GET | `/ccar-order-history/api/v1/me/orders` | Order list |
+| POST | `/ccar-order-history/api/v1/orders/confirm-delivery-record` | Confirm vehicle delivery |
+| PUT | `/ccar-order-history/api/v1/orders/{id}/delivery` | Update delivery |
 
 ---
 
-## Telemetry Object IDs (Chi Tiết)
+## Telemetry Object IDs (Details)
 
-Telemetry data được request qua POST body với format:
+Telemetry data is requested via POST body with the format:
 ```json
 [
   {"objectId": "34180", "instanceId": "1", "resourceId": "10"},
@@ -235,34 +235,34 @@ Telemetry data được request qua POST body với format:
 ]
 ```
 
-### Nhóm Chính
+### Main Groups
 
 | Object ID | Instance | Resource | Alias | Description |
 |-----------|----------|----------|-------|-------------|
 | 34180 | 1 | 10 | battery_soc | State of Charge (%) |
-| 34180 | 1 | 7 | estimated_range | Phạm vi ước tính (km) |
-| 34183 | 0 | 1 | charging_status | Trạng thái sạc |
-| 34183 | 0 | 4 | charging_remain_time | Thời gian sạc còn lại |
-| 34183 | 0 | 12 | charging_power | Công suất sạc (kW) |
-| 34190 | 0-3 | * | tire_pressure_* | Áp suất lốp (4 bánh) |
-| 34191 | 0-5 | * | door_status_* | Trạng thái cửa (6 cửa) |
-| 34199 | 0 | 0 | odometer | Số km đã đi |
-| 34182 | 0 | * | location | Vị trí GPS (lat/lon/heading) |
-| 34192 | 0 | 0 | exterior_temp | Nhiệt độ ngoài trời |
-| 34192 | 0 | 1 | interior_temp | Nhiệt độ trong xe |
-| 34185 | 0 | 0 | hvac_status | Trạng thái điều hòa |
-| 34186 | 0 | * | light_status | Trạng thái đèn |
-| 34187 | 0 | 0 | gear | Số (P/R/N/D) |
-| 34188 | 0 | 0 | speed | Tốc độ hiện tại |
-| 34198 | 0 | * | window_status | Trạng thái cửa sổ |
+| 34180 | 1 | 7 | estimated_range | Estimated range (km) |
+| 34183 | 0 | 1 | charging_status | Charging status |
+| 34183 | 0 | 4 | charging_remain_time | Remaining charging time |
+| 34183 | 0 | 12 | charging_power | Charging power (kW) |
+| 34190 | 0-3 | * | tire_pressure_* | Tire pressure (4 wheels) |
+| 34191 | 0-5 | * | door_status_* | Door status (6 doors) |
+| 34199 | 0 | 0 | odometer | Distance traveled |
+| 34182 | 0 | * | location | GPS location (lat/lon/heading) |
+| 34192 | 0 | 0 | exterior_temp | Outdoor temperature |
+| 34192 | 0 | 1 | interior_temp | Interior temperature |
+| 34185 | 0 | 0 | hvac_status | HVAC status |
+| 34186 | 0 | * | light_status | Light status |
+| 34187 | 0 | 0 | gear | Gear (P/R/N/D) |
+| 34188 | 0 | 0 | speed | Current speed |
+| 34198 | 0 | * | window_status | Window status |
 
-> Danh sách đầy đủ được lấy từ `/modelmgmt/api/v2/vehicle-model/mobile-app/vehicle/get-alias` và lưu tại `src/config/static_alias_map.json`.
+> The full list is fetched from `/modelmgmt/api/v2/vehicle-model/mobile-app/vehicle/get-alias` and stored at `src/config/static_alias_map.json`.
 
 ---
 
 ## Remote Commands
 
-Gửi qua POST `/ccaraccessmgmt/api/v2/remote/app/command`:
+Sent via POST `/ccaraccessmgmt/api/v2/remote/app/command`:
 
 ```json
 {
@@ -272,21 +272,21 @@ Gửi qua POST `/ccaraccessmgmt/api/v2/remote/app/command`:
 }
 ```
 
-### Danh sách Command Types (từ APK)
+### Command Types (from APK)
 
 | Command | Description |
 |---------|-------------|
-| LOCK_VEHICLE | Khóa xe |
-| UNLOCK_VEHICLE | Mở khóa xe |
-| FLASH_LIGHT | Nháy đèn |
-| HONK_HORN | Bấm còi |
-| START_AC | Bật điều hòa |
-| STOP_AC | Tắt điều hòa |
-| OPEN_TRUNK | Mở cốp |
-| CLOSE_TRUNK | Đóng cốp |
-| START_CHARGING | Bắt đầu sạc |
-| STOP_CHARGING | Dừng sạc |
-| FIND_MY_CAR | Tìm xe |
+| LOCK_VEHICLE | Lock vehicle |
+| UNLOCK_VEHICLE | Unlock vehicle |
+| FLASH_LIGHT | Flash lights |
+| HONK_HORN | Honk horn |
+| START_AC | Turn on AC |
+| STOP_AC | Turn off AC |
+| OPEN_TRUNK | Open trunk |
+| CLOSE_TRUNK | Close trunk |
+| START_CHARGING | Start charging |
+| STOP_CHARGING | Stop charging |
+| FIND_MY_CAR | Find my car |
 
 ---
 
@@ -331,17 +331,17 @@ Other Modules:
 | What3Words | `https://api.what3words.com/` | W3wServiceModule |
 | Guest Mode CDN | `https://d1aza9v8tzxrkt.cloudfront.net/` | GuestServiceModule |
 
-> Base URL chính có thể thay đổi thông qua Firebase Remote Config key `android_vf_service_base_url`.
+> The main base URL can be changed via Firebase Remote Config key `android_vf_service_base_url`.
 
 ---
 
-## Firebase Remote Config Keys (Liên Quan Đến API)
+## Firebase Remote Config Keys (API-Related)
 
-Các config key ảnh hưởng đến kết nối API:
+Config keys that affect API connectivity:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `android_vf_service_base_url` | String | Base URL cho VF service APIs |
+| `android_vf_service_base_url` | String | Base URL for VF service APIs |
 | `android_vf_auth0_base_url` | String | Auth0 base URL |
 | `android_vf_auto_base_url` | String | VF Auto service URL |
 | `android_vf_om_base_url` | String | OEM management URL |
@@ -353,4 +353,4 @@ Các config key ảnh hưởng đến kết nối API:
 
 ---
 
-**Note:** Tài liệu này được tạo từ phân tích smali decompilation. Số lượng endpoint thực tế có thể thay đổi theo version APK.
+**Note:** This document was generated from smali decompilation analysis. The actual number of endpoints may vary depending on the APK version.

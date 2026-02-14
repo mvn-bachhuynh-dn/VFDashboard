@@ -8,7 +8,7 @@
 
 ## Overview
 
-The VinFast Connected Car API uses the X-HASH authentication header to protect telemetry endpoints. This document records the algorithm that was reverse engineered.
+VinFast Connected Car API sử dụng X-HASH authentication header để bảo vệ các telemetry endpoints. Document này ghi lại algorithm đã được reverse engineer.
 
 ---
 
@@ -206,7 +206,7 @@ POST /api/v3.2/connected_car/app/ping
 
 ### Overview
 
-X-HASH-2 is the second signing layer, implemented in native code (`libsecure.so`). The server began requiring this header around February 2026 for telemetry endpoints.
+X-HASH-2 là lớp signing thứ hai, được implement trong native code (`libsecure.so`). Server bắt đầu yêu cầu header này từ khoảng tháng 2/2026 cho telemetry endpoints.
 
 ### Required Headers (Updated)
 
@@ -302,32 +302,32 @@ function generateXHash2({ platform, vinCode, identifier, path, method, timestamp
 
 ### Important Notes
 
-1. **`x-device-platform` must be `android`** — The server rejects `ios` and other custom values for **all** API endpoints (not just telemetry). Using `ios` will result in a 401 even on the `user-vehicle` endpoint, leading to a redirect loop back to the login page.
-2. **Why only Android is supported?** — Reverse engineering an APK (Android) is much faster and easier compared to iOS (IPA requires jailbreak, native frameworks are difficult to extract). The secret keys and algorithms in this document were all extracted from the Android APK (`libsecure.so`, `HMACInterceptor.smali`). iOS may use different secret keys and signing flows — this has not been thoroughly investigated.
-3. **`x-device-family` and `x-device-os-version` are not validated** — Custom values can be used (VFDashboard currently uses `VFDashboard` / `Community`).
-4. The X-HASH-2 secret key (`ConnectedCar@6521`) is built byte-by-byte in native code to evade string search.
-5. The native library also performs anti-tamper checks (APK signature, Frida detection).
-6. Both X-HASH and X-HASH-2 must use the **same** timestamp value.
+1. **`x-device-platform` phải là `android`** — Server reject `ios` và các giá trị tùy chỉnh khác cho **tất cả** API endpoints (không chỉ telemetry). Dùng `ios` sẽ bị 401 ngay cả ở `user-vehicle` endpoint, dẫn đến redirect loop về trang login.
+2. **Tại sao chỉ hỗ trợ Android?** — Việc dịch ngược APK (Android) nhanh và dễ hơn nhiều so với iOS (IPA cần jailbreak, khó extract native frameworks). Các secret key và algorithm trong tài liệu này đều được trích xuất từ Android APK (`libsecure.so`, `HMACInterceptor.smali`). iOS có thể dùng secret key và signing flow khác — chưa được nghiên cứu kỹ.
+3. **`x-device-family` và `x-device-os-version` không bị validate** — Có thể đặt giá trị tùy chỉnh (VFDashboard hiện dùng `VFDashboard` / `Community`).
+4. X-HASH-2 secret key (`ConnectedCar@6521`) được build byte-by-byte trong native code để tránh string search.
+5. The native library cũng thực hiện anti-tamper checks (APK signature, Frida detection).
+6. Cả X-HASH và X-HASH-2 phải dùng **cùng** giá trị timestamp.
 
 ---
 
 ## VFDashboard Current Configuration
 
-Headers that VFDashboard currently uses (verified working):
+Các header mà VFDashboard đang sử dụng (đã verified hoạt động):
 
 | Header | Value | Validated by Server? |
 |--------|-------|:---:|
-| `x-device-platform` | `android` | **Yes** — required `android` |
-| `x-device-family` | `VFDashboard` | No — custom values OK |
-| `x-device-os-version` | `Community` | No — custom values OK |
+| `x-device-platform` | `android` | **Yes** — bắt buộc `android` |
+| `x-device-family` | `VFDashboard` | No — tùy chỉnh OK |
+| `x-device-os-version` | `Community` | No — tùy chỉnh OK |
 | `x-device-identifier` | `vfdashboard-community-edition` | No* |
 | `x-service-name` | `CAPP` | Unknown |
 | `x-app-version` | `1.10.3` | Unknown |
 | `x-device-locale` | `vi-VN` | No |
 | `x-timezone` | `Asia/Ho_Chi_Minh` | No |
 
-> *`x-device-identifier` is used in the X-HASH-2 message, but the server accepts custom values.
+> *`x-device-identifier` được dùng trong X-HASH-2 message, nhưng server chấp nhận giá trị tùy chỉnh.
 
 ---
 
-**Note:** Secret keys are kept private in the source code. The dashboard auto-generates both X-HASH and X-HASH-2 for every API request.
+**Note:** Secret keys được giữ private trong source code. Dashboard tự động generate cả X-HASH và X-HASH-2 cho mọi API request.

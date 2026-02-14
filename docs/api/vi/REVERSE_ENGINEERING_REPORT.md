@@ -2,51 +2,51 @@
 
 **Date:** January 24, 2026
 **Target:** VinFast Companion App v2.16.16 (iOS/Android)
-**Objective:** Reverse engineer X-HASH authentication so VFDashboard can operate independently
+**Objective:** Reverse engineer X-HASH authentication để VFDashboard hoạt động độc lập
 
 ---
 
-## Part 1: Methods and Process for Finding the Secret Key
+## Phần 1: Các Biện Pháp và Quá Trình Tìm Secret Key
 
 ### Phase 1: Traffic Analysis (MITM Proxy)
 
-**Tools:** mitmproxy
+**Công cụ:** mitmproxy
 
-**Steps:**
+**Bước thực hiện:**
 
-1. Setup mitmproxy on port 8080
-2. Install certificate on iOS device
-3. Capture traffic from VinFast app
+1. Setup mitmproxy trên port 8080
+2. Cài certificate lên device iOS
+3. Capture traffic từ VinFast app
 
-**Results:**
+**Kết quả:**
 
-- Discovery of headers: `X-HASH`, `X-TIMESTAMP`, `X-VIN-CODE`
+- Phát hiện headers: `X-HASH`, `X-TIMESTAMP`, `X-VIN-CODE`
 - Hash format: Base64, 44 characters (256-bit = HMAC-SHA256)
-- Hash changes with timestamp → time-based
-- Hash differs per endpoint → path is part of input
+- Hash thay đổi theo timestamp → time-based
+- Hash khác nhau cho mỗi endpoint → path có trong input
 
-**Limitations:** Can only capture hashes, cannot determine how they are generated
+**Hạn chế:** Chỉ capture được hash, không biết cách generate
 
 ---
 
 ### Phase 2: APK Decompilation
 
-**Tools:** jadx (Android decompiler)
+**Công cụ:** jadx (Android decompiler)
 
-**Steps:**
+**Bước thực hiện:**
 
 ```bash
 brew install jadx
 jadx -d docs/jadx_output/ com.vinfast.companion_app/*.dex
 ```
 
-**Important files found:**
+**Files quan trọng tìm được:**
 
-1. `TokenInterceptor.java` - OkHttp interceptor that adds X-HASH header
+1. `TokenInterceptor.java` - OkHttp interceptor thêm X-HASH header
 2. `SecurityUtils.java` - Cryptographic utilities
 3. `HMACInterceptor.java` - HMAC signing logic
 
-**Findings from code:**
+**Phát hiện từ code:**
 
 ```java
 // TokenInterceptor.java - method c() (secret key generation)
@@ -71,7 +71,7 @@ byte[] secretKey = SecurityUtils.i(
 );
 ```
 
-**Discovery of message format:**
+**Phát hiện message format:**
 
 ```java
 // Build message parts
@@ -93,14 +93,14 @@ String xHash = securityUtils.j(securityUtils.n(keyBytes, messageBytes));
 
 ### Phase 3: Secret Key Decryption
 
-**Problem:** Python decryption failed with padding errors
+**Vấn đề:** Python decryption failed với padding errors
 
-**Root cause:**
+**Nguyên nhân:**
 
-- Incorrect birth date milliseconds (timezone issue)
+- Sai birth date milliseconds (timezone issue)
 - Python: 744768000000 vs APK logs: 744854400000 (24h difference)
 
-**Solution:** Write Java code to decrypt exactly as the APK does
+**Giải pháp:** Viết Java code để decrypt chính xác như APK
 
 ```java
 // DecryptSecret.java
@@ -134,7 +134,7 @@ byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode("AHYhIZONK8ZR58s76Y
 
 ### Phase 4: Verification
 
-**Test with captured data:**
+**Test với captured data:**
 
 ```python
 method = "POST"
@@ -149,40 +149,40 @@ message = f"{method}_{path}_{vin}_{secret}_{timestamp}".lower()
 xhash = base64(hmac_sha256(secret, message))
 # "0ahe0CvpJnSyZH2BU1LxwA9Ytfa1qxW784Xc3Kvr4cU="
 
-# Matches captured hash from proxy ✓
+# Match với captured hash từ proxy ✓
 ```
 
 ---
 
-### Methods Summary
+### Tổng kết Biện Pháp
 
-| Phase | Tools     | Purpose         | Results                              |
-| ----- | --------- | --------------- | ------------------------------------ |
-| 1     | mitmproxy | Capture traffic | Identified hash format, headers      |
-| 2     | jadx      | Decompile APK   | Found algorithm, encrypted secret    |
-| 3     | Java      | Decrypt secret  | `Vinfast@2025`                       |
-| 4     | Python    | Verify          | 100% match with captured hashes      |
+| Phase | Công cụ   | Mục đích        | Kết quả                         |
+| ----- | --------- | --------------- | ------------------------------- |
+| 1     | mitmproxy | Capture traffic | Xác định hash format, headers   |
+| 2     | jadx      | Decompile APK   | Tìm algorithm, encrypted secret |
+| 3     | Java      | Decrypt secret  | `Vinfast@2025`                  |
+| 4     | Python    | Verify          | Match 100% với captured hashes  |
 
 **Key insights:**
 
-1. Birth date `1993-08-08` is used to generate the AES key
-2. Encrypted secret is hardcoded in the APK
+1. Birth date `1993-08-08` được dùng để generate AES key
+2. Encrypted secret hardcoded trong APK
 3. Message format: `method_path_vin_secret_timestamp` (lowercase)
 4. HMAC-SHA256 + Base64 encoding
 
 ---
 
-## Part 2: Reverse Engineering X-HASH-2 (Native Crypto)
+## Phần 2: Reverse Engineering X-HASH-2 (Native Crypto)
 
 **Date:** February 14, 2026
 **Target:** VinFast Companion App v1.10.3 (Android), `libsecure.so` (ARM64)
-**Objective:** Reverse engineer X-HASH-2 - the second signing layer from native code
+**Objective:** Reverse engineer X-HASH-2 - lớp signing thứ hai từ native code
 
 ---
 
-### Phase 1: Discovery of X-HASH-2
+### Phase 1: Phát hiện X-HASH-2
 
-After VinFast updated the server, the telemetry API started returning `{"code":327681,"message":"Invalid request signature"}` even though X-HASH was correct. APK analysis revealed an additional `X-HASH-2` header generated by `CryptoInterceptor` calling the native method `VFCrypto.signRequest()` in `libsecure.so`.
+Sau khi VinFast cập nhật server, telemetry API bắt đầu trả về `{"code":327681,"message":"Invalid request signature"}` dù X-HASH đúng. Phân tích APK cho thấy có thêm header `X-HASH-2` được tạo bởi `CryptoInterceptor` gọi native method `VFCrypto.signRequest()` trong `libsecure.so`.
 
 **OkHttp Interceptor chain:**
 ```
@@ -193,12 +193,12 @@ TokenInterceptor → HMACInterceptor (X-HASH) → CryptoInterceptor (X-HASH-2)
 
 ### Phase 2: APK Decompilation (Android Split APK)
 
-**Tools:** apktool (decompile smali)
+**Công cụ:** apktool (decompile smali)
 
-**Steps:**
+**Bước thực hiện:**
 
 ```bash
-# Pull APK from device (split APKs)
+# Pull APK từ device (split APKs)
 adb shell pm path com.vinfast.companion.app
 adb pull /data/app/~~xxx/base.apk       # 116M
 adb pull /data/app/~~xxx/split_config.arm64_v8a.apk  # 20M
@@ -208,14 +208,14 @@ adb pull /data/app/~~xxx/split_config.xxhdpi.apk     # 8.5M
 apktool d base.apk -o decode/
 ```
 
-**Important files found:**
+**Files quan trọng tìm được:**
 
-1. `smali_classes15/com/vinfast/companion/cryptowrapper/CryptoInterceptor.smali` - Generates X-HASH-2
+1. `smali_classes15/com/vinfast/companion/cryptowrapper/CryptoInterceptor.smali` - Tạo X-HASH-2
 2. `smali_classes15/com/vinfast/companion/cryptowrapper/Message.smali` - 14-field data class
 3. `smali_classes13/com/lxquyen/secure/VFCrypto.smali` - JNI wrapper
 4. `lib/arm64-v8a/libsecure.so` - Native library (388K)
 
-**Findings from smali:**
+**Phát hiện từ smali:**
 
 ```java
 // CryptoInterceptor builds Message object with 14 fields:
@@ -236,9 +236,9 @@ request.header("X-HASH-2", hash2);
 
 ### Phase 3: Native Library Decompilation (Ghidra)
 
-**Tools:** Ghidra 12 (headless mode)
+**Công cụ:** Ghidra 12 (headless mode)
 
-**Steps:**
+**Bước thực hiện:**
 
 ```bash
 # Extract native library
@@ -308,9 +308,9 @@ transform(result, tolower);  // FUN_0012826c: char | 0x20
 
 ### Phase 5: Secret Key Extraction
 
-**Initial problem:** Assumed X-HASH-2 was just Base64 encoding of the concatenated string (no crypto). But the server still rejected it.
+**Vấn đề ban đầu:** Tưởng X-HASH-2 chỉ là Base64 encode của concatenated string (không có crypto). Nhưng server vẫn reject.
 
-**Discovery:** The `signRequest` function, after constructing the message string, calls `FUN_00127914` to **HMAC-SHA256 sign** before returning.
+**Phát hiện:** Hàm `signRequest` sau khi tạo message string, gọi `FUN_00127914` để **HMAC-SHA256 sign** trước khi trả về.
 
 **Secret key construction (`FUN_0012758c`):**
 
@@ -336,12 +336,12 @@ param[16] = 0x31; // 1
 // = "ConnectedCar@6521"
 ```
 
-**Anti-detection measures in libsecure.so:**
-- Key built byte-by-byte, not as a string literal → grep/strings cannot find it
-- Includes `clock()` and `time()` checks between bytes (anti-debug timing)
+**Anti-detection measures trong libsecure.so:**
+- Key xây dựng từng byte, không phải string literal → grep/strings không tìm được
+- Có thêm `clock()` và `time()` checks giữa các byte (anti-debug timing)
 - APK signature verification (reject re-signed APKs)
 - Frida/Xposed/Substrate detection via `/proc/self/maps`
-- Package name check: `com.vinfast.companion.app` or `.qa`
+- Package name check: `com.vinfast.companion.app` hoặc `.qa`
 
 ---
 
@@ -396,27 +396,27 @@ const hash2 = hmac.digest('base64');
 
 ---
 
-### X-HASH-2 Summary
+### Tổng kết X-HASH-2
 
-| Phase | Tools | Purpose | Results |
-|-------|-------|---------|---------|
-| 1 | apktool + smali | Find interceptor chain | CryptoInterceptor → VFCrypto.signRequest() |
-| 2 | Ghidra (headless) | Decompile ARM64 .so | 51K lines C, found message format |
+| Phase | Công cụ | Mục đích | Kết quả |
+|-------|---------|----------|---------|
+| 1 | apktool + smali | Tìm interceptor chain | CryptoInterceptor → VFCrypto.signRequest() |
+| 2 | Ghidra (headless) | Decompile ARM64 .so | 51K lines C, tìm message format |
 | 3 | Ghidra analysis | Extract secret key | `ConnectedCar@6521` (byte-by-byte) |
-| 4 | Node.js | Verify | 100% match, server returned 200 OK |
+| 4 | Node.js | Verify | Match 100%, server trả 200 OK |
 
 **Key insights:**
 
-1. X-HASH-2 uses **HMAC-SHA256** (not just Base64 encoding)
-2. Secret key `ConnectedCar@6521` is built byte-by-byte in native code to avoid detection
-3. Message format differs from X-HASH: `platform_[vin_]identifier_path_method_timestamp`
-4. Path processing: strip leading `/`, replace `/` with `_`
-5. Only 6 fields (not 14) actually participate in the hash
-6. Headers must use `x-device-platform: android` (server validates)
+1. X-HASH-2 dùng **HMAC-SHA256** (không phải chỉ Base64 encode)
+2. Secret key `ConnectedCar@6521` được build từng byte trong native code để tránh detection
+3. Message format khác X-HASH: `platform_[vin_]identifier_path_method_timestamp`
+4. Path processing: strip `/` đầu, replace `/` → `_`
+5. Chỉ 6 fields (không phải 14) thực sự tham gia vào hash
+6. Headers phải dùng `x-device-platform: android` (server validate)
 
 ---
 
-## Part 3: API Endpoints Log
+## Phần 3: API Endpoints Log
 
 ### Authentication
 
@@ -480,7 +480,7 @@ Response:
 }
 
 Notes:
-- Returns user's vehicle list
+- Trả về danh sách xe của user
 - batteryCapacity = kWh
 - subscriptionStatus: ACTIVE/EXPIRED/NONE
 ```
@@ -579,8 +579,8 @@ Response:
 }
 
 Notes:
-- Check vehicle online/offline status
-- Wake up vehicle from sleep mode
+- Kiểm tra xe online/offline
+- Wake up xe từ sleep mode
 ```
 
 ---
@@ -627,7 +627,7 @@ Response:
 }
 
 Notes:
-- Search charging stations near location
+- Tìm trạm sạc gần vị trí
 - maxPower = kW
 - distance = km
 ```
@@ -743,9 +743,9 @@ Notes:
 
 ---
 
-## Part 3: Additional Exploitation Possibilities
+## Phần 3: Khả Năng Khai Thác Thêm
 
-### Confirmed accessible:
+### Đã xác nhận có thể lấy:
 
 1. **Vehicle Info:** VIN, model, year, color, battery capacity
 2. **Real-time Telemetry:** SOC, range, tire pressure, door/trunk/hood status
@@ -754,7 +754,7 @@ Notes:
 5. **Trip History:** Routes, distance, energy consumption
 6. **Remote Commands:** Lock/unlock, climate, horn, flash
 
-### Needs further exploration:
+### Cần explore thêm:
 
 1. **Notifications API** - Push notification history
 2. **Service/Maintenance API** - Service records
@@ -762,7 +762,7 @@ Notes:
 4. **Energy Statistics** - Monthly/weekly consumption reports
 5. **Geofence API** - Location alerts configuration
 
-### Untested endpoints:
+### Endpoints chưa test:
 
 ```
 GET /ccarusermgnt/api/v1/notifications
@@ -774,13 +774,13 @@ POST /ccarusermgnt/api/v1/geofence
 
 ---
 
-## Conclusion
+## Kết Luận
 
-**Success:**
+**Thành công:**
 
-- Fully reverse engineered X-HASH algorithm
-- VFDashboard can operate independently
-- No proxy from official app required
+- Reverse engineer X-HASH algorithm hoàn chỉnh
+- VFDashboard có thể hoạt động độc lập
+- Không cần proxy từ official app
 
 **Secret Key Info:**
 
@@ -790,6 +790,6 @@ POST /ccarusermgnt/api/v1/geofence
 
 **Next Steps:**
 
-1. Test unexplored endpoints
-2. Document additional Object/Resource IDs
+1. Test các endpoint chưa explore
+2. Document thêm Object/Resource IDs
 3. Build complete API client library
