@@ -479,7 +479,12 @@ export default function SystemHealth() {
   };
 
   return (
-    <div className="bg-white rounded-3xl p-4 md:p-5 shadow-sm border border-gray-100 flex-1 min-h-0 md:min-h-[400px] md:h-full flex flex-col">
+    <div className="bg-white rounded-3xl p-4 md:p-5 shadow-sm border border-gray-100 flex-1 min-h-0 md:min-h-[400px] md:h-full flex flex-col overflow-hidden relative">
+      {/* Shimmer Overlay when Refreshing */}
+      {data.isRefreshing && (
+        <div className="absolute inset-0 z-20 animate-shimmer opacity-30 pointer-events-none"></div>
+      )}
+
       <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
         <svg
           className="w-6 h-6 text-blue-600 flex-shrink-0"
@@ -497,8 +502,10 @@ export default function SystemHealth() {
         Vehicle Status
       </h3>
 
-      {/* MOBILE ONLY: Climate Section (moved from Energy tab) */}
-      <div className="md:hidden grid grid-cols-3 gap-2 p-1 mb-4">
+      {/* MOBILE ONLY: Climate Section */}
+      <div
+        className={`md:hidden grid grid-cols-3 gap-2 p-1 mb-4 ${!data.isRefreshing ? "animate-blur-in" : "opacity-40"}`}
+      >
         {/* Outside Temperature */}
         <div className="p-2 rounded-xl text-center bg-gray-50 border border-gray-100 flex flex-col justify-center min-h-[60px]">
           <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">
@@ -578,11 +585,14 @@ export default function SystemHealth() {
         </div>
       </div>
 
-      <div className="space-y-2 flex-1 md:overflow-y-auto pr-2 custom-scrollbar">
+      <div
+        className={`space-y-2 flex-1 md:overflow-y-auto pr-2 custom-scrollbar ${!data.isRefreshing ? "animate-blur-in" : "opacity-40"}`}
+      >
         {items.map((item, index) => (
           <div
             key={index}
-            className="grid grid-cols-[32px_1fr_auto] gap-2 items-center pb-2 border-b border-gray-50 last:border-0 last:pb-0"
+            className="grid grid-cols-[32px_1fr_auto] gap-2 items-center pb-2 border-b border-gray-50 last:border-0 last:pb-0 animate-in fade-in slide-in-from-bottom-1"
+            style={{ animationDelay: `${index * 50}ms` }}
           >
             <div
               className={`h-8 w-8 rounded-xl flex items-center justify-center border border-gray-50/50 ${item.bg} ${item.iconColor}`}
@@ -594,11 +604,29 @@ export default function SystemHealth() {
                 {item.label}
               </p>
             </div>
-            <span
-              className={`text-[10px] font-bold px-2 py-1 rounded-md w-[100px] text-center truncate shadow-sm ${item.bg} ${item.txt}`}
-            >
-              {item.value}
-            </span>
+            {(() => {
+              const isMissingValue =
+                item.value === "N/A" ||
+                item.value === "--" ||
+                item.value === null ||
+                item.value === undefined ||
+                item.value === "";
+              const showLoading = data.isRefreshing && isMissingValue;
+
+              if (showLoading) {
+                return (
+                  <div className="h-6 w-20 bg-gray-50 animate-shimmer rounded-md"></div>
+                );
+              }
+
+              return (
+                <span
+                  className={`text-[10px] font-bold px-2 py-1 rounded-md w-[100px] text-center truncate shadow-sm transition-all duration-300 ${isMissingValue ? "bg-gray-50 text-gray-400" : `${item.bg} ${item.txt}`}`}
+                >
+                  {isMissingValue ? "--" : item.value}
+                </span>
+              );
+            })()}
           </div>
         ))}
       </div>

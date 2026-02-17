@@ -25,10 +25,18 @@ export default function DigitalTwin() {
   const odo = formatOdometer(data.odometer);
 
   React.useEffect(() => {
+    const hasApiImage =
+      typeof data.vehicleImage === "string" && data.vehicleImage.trim() !== "";
+    if (!hasApiImage) {
+      setImageLoaded(true);
+      return;
+    }
+
+    setImageLoaded(false);
     if (imgRef.current && imgRef.current.complete) {
       setImageLoaded(true);
     }
-  }, [data.vin]);
+  }, [data.vin, data.vehicleImage]);
 
   // Multi-Vehicle Logic
   const allVehicles = data.vehicles || [];
@@ -139,16 +147,11 @@ export default function DigitalTwin() {
   };
 
   const getCarImage = () => {
-    // 1. Prefer API provided image
-    if (data.vehicleImage) return data.vehicleImage;
-
-    // 2. Fallback to model-based local assets
-    const model = (data.marketingName || data.model || "").toUpperCase();
-    if (model.includes("VF 3")) return "/vf3-iso.png";
-    if (model.includes("VF 5")) return "/vf5-iso.png";
-    if (model.includes("VF 6")) return "/vf6-iso.png";
-    if (model.includes("VF 7")) return "/vf7-iso.png";
-    if (model.includes("VF 8")) return "/vf8-iso.png";
+    // Only use API-provided image. No local model fallback.
+    if (typeof data.vehicleImage === "string") {
+      const apiImage = data.vehicleImage.trim();
+      if (apiImage) return apiImage;
+    }
 
     return null;
   };
@@ -431,6 +434,12 @@ export default function DigitalTwin() {
               }}
             />
           )}
+
+          {!carImageSrc && (
+            <div className="w-full h-full flex items-center justify-center text-3xl font-mono font-bold text-gray-300 z-10 select-none">
+              --
+            </div>
+          )}
         </div>
 
         {/* Tire Cards */}
@@ -474,11 +483,6 @@ export default function DigitalTwin() {
             (gear) => {
               // Normalize data gear (handle numbers or strings)
               const current = data.gear_position;
-              // Generic Mapping attempt:
-              // P: 'P', 1, 128
-              // R: 'R', 2
-              // N: 'N', 3
-              // D: 'D', 4, 9 (Drive)
               let isActive = false;
               if (String(current) === gear) isActive = true;
               if (
@@ -494,9 +498,12 @@ export default function DigitalTwin() {
               return (
                 <span
                   key={gear}
-                  className={`text-base font-black transition-all duration-300 ${isActive ? "text-blue-600 scale-125" : "text-gray-300 hover:text-gray-400"}`}
+                  className={`relative text-base font-black transition-all duration-300 ${isActive ? "text-blue-600 scale-125" : "text-gray-300 hover:text-gray-400"}`}
                 >
                   {gear}
+                  {isActive && (
+                    <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full animate-pulse"></span>
+                  )}
                 </span>
               );
             },
@@ -506,14 +513,14 @@ export default function DigitalTwin() {
         {/* Warnings Section */}
         <div className="h-6 flex items-center justify-center w-full">
           {warnings.length > 0 ? (
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 animate-blur-in">
               {warnings.map((w, idx) => (
                 <WarningItem key={idx} label={w.label} detail={w.detail} />
               ))}
             </div>
           ) : (
             /* Show nothing or minimal status when safe */
-            <span className="text-[10px] font-bold text-green-600 flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-green-600 flex items-center gap-1.5 animate-pulse-slow bg-green-50 px-3 py-1 rounded-full border border-green-100 animate-glow">
               <svg
                 className="w-3 h-3"
                 fill="none"
