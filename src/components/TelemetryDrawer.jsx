@@ -392,6 +392,7 @@ export default function TelemetryDrawer({ isOpen, onClose }) {
   const data = vehicle.fullTelemetryData[vehicle.vin] || [];
   const aliases = vehicle.fullTelemetryAliases[vehicle.vin] || [];
   const timestamp = vehicle.fullTelemetryTimestamps[vehicle.vin];
+  const debugLog = vehicle.debugLogByVin?.[vehicle.vin] || vehicle.debugLog || [];
 
   // Map raw data with alias metadata
   const mappedData = React.useMemo(() => {
@@ -561,10 +562,10 @@ export default function TelemetryDrawer({ isOpen, onClose }) {
     });
 
     // Add Deep Scan: Service & Maintenance Data - placed near bottom (priority 900)
-    if (vehicle.debugLog && vehicle.debugLog.length > 0) {
+    if (debugLog && debugLog.length > 0) {
       const rawTelemetryData = data;
 
-      const debugItems = vehicle.debugLog.map((r) => {
+      const debugItems = debugLog.map((r) => {
         const oid = String(r.devObjID);
         const iid = String(r.devObjInstID || "0");
         const rid = String(r.devRsrcID || "0");
@@ -673,7 +674,7 @@ export default function TelemetryDrawer({ isOpen, onClose }) {
         if (b.id === "others") return -1;
         return (a.priority || 999) - (b.priority || 999);
       });
-  }, [filteredData, vehicle.debugLog]);
+  }, [filteredData, debugLog]);
 
   useEffect(() => {
     if (isOpen && !timestamp && !vehicle.isScanning) {

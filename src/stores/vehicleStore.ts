@@ -61,6 +61,9 @@ export interface VehicleState {
   weather_outside_temp?: number | null;
   inside_temp?: number | null; // From Telemetry
   fan_speed?: number | null;
+  weather_code?: number | null;
+  location_address?: string;
+  weather_address?: string;
 
   // ECU
   bms_version?: string;
@@ -138,6 +141,7 @@ export interface VehicleState {
   fullTelemetryTimestamps: Record<string, number>; // VIN -> Timestamp
   isScanning: boolean;
   debugLog?: any[]; // For storing deep scan candidates
+  debugLogByVin?: Record<string, any[]>;
 
   lastUpdated: number;
   isRefreshing?: boolean;
@@ -242,6 +246,7 @@ export const vehicleStore = map<VehicleState>({
   fullTelemetryTimestamps: {},
   isScanning: false,
   debugLog: [],
+  debugLogByVin: {},
 
   lastUpdated: Date.now(),
   isRefreshing: false,
@@ -251,18 +256,193 @@ export const vehicleStore = map<VehicleState>({
 
 const telemetryFetchInFlight = new Map<string, Promise<void>>();
 let telemetryInFlightCount = 0;
+const locationEnrichInFlight = new Map<string, Promise<void>>();
+const locationEnrichState = new Map<
+  string,
+  { lat: number; lon: number; lastAttemptAt: number }
+>();
 
-export const updateVehicleData = (data: Partial<VehicleState>) => {
+const LOCATION_ENRICH_TTL_MS = 3 * 60 * 1000;
+const LOCATION_ENRICH_DISTANCE_M = 500;
+const LOCATION_ENRICH_TIMEOUT_MS = 5000;
+
+const toCoordNumber = (value: any): number | null => {
+  const valueNum = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(valueNum) ? valueNum : null;
+};
+
+const isValidCoordPair = (
+  latitude: number | null,
+  longitude: number | null,
+): latitude is number => {
+  if (latitude == null || longitude == null) return false;
+  if (latitude < -90 || latitude > 90) return false;
+  if (longitude < -180 || longitude > 180) return false;
+  return true;
+};
+
+const haversineMeters = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(a)));
+};
+
+const shouldEnrichLocationWeather = (
+  vin: string,
+  latitude: number,
+  longitude: number,
+  force = false,
+) => {
+  if (force) return true;
+
+  const now = Date.now();
+  const latest = locationEnrichState.get(vin);
+  if (!latest) return true;
+  if (now - latest.lastAttemptAt > LOCATION_ENRICH_TTL_MS) return true;
+
+  const movedMeters = haversineMeters(
+    latest.lat,
+    latest.lon,
+    latitude,
+    longitude,
+  );
+  return movedMeters >= LOCATION_ENRICH_DISTANCE_M;
+};
+
+const enrichLocationAndWeather = async (
+  vin: string,
+  latitude: number,
+  longitude: number,
+  force = false,
+) => {
+  if (!isValidCoordPair(latitude, longitude)) return;
+  if (!shouldEnrichLocationWeather(vin, latitude, longitude, force)) return;
+
+  const existing = locationEnrichInFlight.get(vin);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const now = Date.now();
+    const activeState = vehicleStore.get();
+    const isActiveVin = activeState.vin === vin;
+    if (isActiveVin) {
+      vehicleStore.setKey("isEnriching", true);
+    }
+
+    const timeout = (ms: number) =>
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("External enrichment timeout")), ms),
+      );
+
+    try {
+      const [geoResult, weatherResult] = await Promise.allSettled([
+        Promise.race([
+          api.fetchLocationName(latitude, longitude),
+          timeout(LOCATION_ENRICH_TIMEOUT_MS),
+        ]),
+        Promise.race([
+          api.fetchWeather(latitude, longitude),
+          timeout(LOCATION_ENRICH_TIMEOUT_MS),
+        ]),
+      ]);
+
+      const updatePayload: Partial<VehicleState> = { vin };
+      if (geoResult.status === "fulfilled" && geoResult.value) {
+        const geo = geoResult.value;
+        if (geo.location_address) updatePayload.location_address = geo.location_address;
+        if (geo.weather_address) updatePayload.weather_address = geo.weather_address;
+      }
+
+      if (weatherResult.status === "fulfilled" && weatherResult.value) {
+        const weather = weatherResult.value;
+        if (weather.temperature !== undefined) {
+          updatePayload.weather_outside_temp = Number(weather.temperature);
+        }
+        if (weather.weathercode !== undefined) {
+          updatePayload.weather_code = Number(weather.weathercode);
+        }
+      }
+
+      if (Object.keys(updatePayload).length > 1) {
+        updateVehicleData(updatePayload);
+      }
+
+      locationEnrichState.set(vin, {
+        lat: latitude,
+        lon: longitude,
+        lastAttemptAt: now,
+      });
+    } catch (e) {
+      locationEnrichState.set(vin, {
+        lat: latitude,
+        lon: longitude,
+        lastAttemptAt: now,
+      });
+    } finally {
+      locationEnrichInFlight.delete(vin);
+      if (vehicleStore.get().vin === vin) {
+        vehicleStore.setKey("isEnriching", false);
+      }
+    }
+  })();
+
+  locationEnrichInFlight.set(vin, task);
+  return task;
+};
+
+type VehicleDataUpdateOptions = {
+  skipNullValues?: boolean;
+};
+
+export const updateVehicleData = (
+  data: Partial<VehicleState>,
+  options: VehicleDataUpdateOptions = {},
+) => {
+  const sanitize = (
+    incoming: Partial<VehicleState>,
+    skipNullValues = false,
+  ): Partial<VehicleState> => {
+    const result: Partial<VehicleState> = {};
+    Object.entries(incoming).forEach(([rawKey, value]) => {
+      const key = rawKey as keyof VehicleState;
+
+      // Ignore undefined values so partial payloads (common with REST app/ping)
+      // do not wipe fields maintained by live MQTT.
+      if (value === undefined) return;
+      // During REST-refresh flows, treat null as "no signal" for optional signals,
+      // while still allowing explicit MQTT null values when passed directly.
+      if (skipNullValues && value === null) return;
+
+      result[key] = value;
+    });
+    return result;
+  };
+
   const current = vehicleStore.get();
+  const { skipNullValues = false } = options;
+
   // We expect 'vin' to be provided in 'data' for robust handling.
   // If not provided, we fallback to current.vin, but this is risky for background updates.
-  const targetVin = data.vin || current.vin;
+  const incoming = sanitize(data, skipNullValues);
+  const targetVin = incoming.vin || current.vin;
 
   if (!targetVin) return;
 
   // Ensure lastUpdated is present for cache consistency
-  const timestamp = data.lastUpdated || Date.now();
-  const dataToCache = { ...data, lastUpdated: timestamp };
+  const timestamp =
+    incoming.lastUpdated && Number.isFinite(incoming.lastUpdated as number)
+      ? incoming.lastUpdated
+      : Date.now();
+  const dataToCache = { ...incoming, lastUpdated: timestamp };
 
   // 1. Update Cache
   const latest = vehicleStore.get();
@@ -451,6 +631,21 @@ const getVehicleBaseState = (
   };
 };
 
+const refreshLocationWeatherForVin = (
+  vin: string,
+  telemetry: Partial<VehicleState> | null,
+) => {
+  if (!vin) return;
+  if (!telemetry) return;
+
+  const latitude = toCoordNumber(telemetry.latitude);
+  const longitude = toCoordNumber(telemetry.longitude);
+  if (!isValidCoordPair(latitude, longitude)) return;
+
+  // Keep smart cache: helper decides TTL/distance/in-flight dedupe.
+  void enrichLocationAndWeather(vin, latitude, longitude, false);
+};
+
 export const switchVehicle = async (targetVin: string) => {
   const current = vehicleStore.get();
 
@@ -466,6 +661,8 @@ export const switchVehicle = async (targetVin: string) => {
 
   // 3. Hydrate from Cache if available
   const cachedData = current.vehicleCache[targetVin] || {};
+  const debugLogFromCache =
+    current.debugLogByVin?.[targetVin] || cachedData.debugLog || [];
 
   // Only skip refresh when cache still has fresh, real telemetry values
   const hasTelemetry = hasTelemetryValues(cachedData);
@@ -477,8 +674,12 @@ export const switchVehicle = async (targetVin: string) => {
     ...baseState,
     ...cachedData,
     vin: targetVin,
+    debugLog: debugLogFromCache,
     isRefreshing: !hasTelemetry, // Only show loading if we don't have telemetry
   });
+
+  // Refresh external enrichment for this VIN only when coordinates changed or cache expired.
+  refreshLocationWeatherForVin(targetVin, cachedData);
 
   // 4. Switch MQTT subscription to new VIN (non-blocking — cached data already shown)
   getMqttClient()
@@ -495,24 +696,30 @@ export const refreshVehicle = async (vin: string) => {
   if (!vin) return;
   const current = vehicleStore.get();
 
-  // 1. Reset Cache for ALL vehicles to just Base State (removing telemetry)
-  const newCache: Record<string, Partial<VehicleState>> = {};
-  current.vehicles.forEach((v) => {
-    const baseState = getVehicleBaseState(v, current);
-    newCache[v.vinCode] = baseState;
-  });
-
-  // 2. Clear main store telemetry immediately if requested vehicle is active
-  if (current.vin === vin) {
-    vehicleStore.set({
-      ...current,
-      ...INITIAL_TELEMETRY,
-      vehicleCache: newCache,
-      isRefreshing: true,
-    });
-  } else {
-    vehicleStore.setKey("vehicleCache", newCache);
+  // 1. Keep live data visible while refreshing.
+  // Invalidate only freshness marker for the target VIN; avoid wiping current telemetry.
+  const newCache = { ...current.vehicleCache };
+  if (newCache[vin]) {
+    const stale = { ...newCache[vin] };
+    delete stale.lastUpdated;
+    newCache[vin] = stale;
   }
+
+  // 2. If target VIN has no cached entry, create minimal base cache record.
+  if (!newCache[vin]) {
+    const targetVehicle = current.vehicles.find((v) => v.vinCode === vin);
+    if (targetVehicle) {
+      newCache[vin] = getVehicleBaseState(targetVehicle, current);
+    } else {
+      newCache[vin] = { vin };
+    }
+  }
+
+  vehicleStore.set({
+    ...current,
+    vehicleCache: newCache,
+    isRefreshing: true,
+  });
 
   // 3. Fetch fresh data for the requested vehicle
   await fetchTelemetry(vin);
@@ -539,7 +746,16 @@ export const fetchTelemetry = async (vin: string, isBackground = false) => {
     try {
       const data = await api.getTelemetry(vin);
       if (data) {
-        updateVehicleData({ ...data, vin });
+        updateVehicleData({ ...data, vin }, { skipNullValues: true });
+        const lat = toCoordNumber(data.latitude);
+        const lon = toCoordNumber(data.longitude);
+        const hasExtWeatherData =
+          !!(data.location_address || data.weather_address) ||
+          data.weather_outside_temp != null ||
+          data.weather_code != null;
+        if (isValidCoordPair(lat, lon) && !hasExtWeatherData) {
+          void enrichLocationAndWeather(vin, lat, lon, false);
+        }
         success = true;
       }
     } catch (e) {
@@ -672,7 +888,23 @@ export const fetchFullTelemetry = async (vin: string, force = false) => {
       `Deep Scan: Found ${candidates.length} interesting aliases`,
       candidates.slice(0, 10),
     );
+    const currentState = vehicleStore.get();
+    const currentCache = currentState.vehicleCache[vin] || {};
+    const updatedCache = {
+      ...currentState.vehicleCache,
+      [vin]: {
+        ...currentCache,
+        debugLog: candidates,
+      },
+    };
+    const updatedDebugLogByVin = {
+      ...(currentState.debugLogByVin || {}),
+      [vin]: candidates,
+    };
+
     vehicleStore.setKey("debugLog", candidates);
+    vehicleStore.setKey("debugLogByVin", updatedDebugLogByVin);
+    vehicleStore.setKey("vehicleCache", updatedCache);
     // ------------------------------------------
 
     // 3. Map to Request Objects
@@ -780,4 +1012,10 @@ export const fetchVehicles = async (): Promise<string | null> => {
 export const updateFromMqtt = (vin: string, parsedData: Partial<VehicleState>) => {
   if (!vin || !parsedData || Object.keys(parsedData).length === 0) return;
   updateVehicleData({ ...parsedData, vin } as Partial<VehicleState>);
+
+  const latitude = toCoordNumber(parsedData.latitude);
+  const longitude = toCoordNumber(parsedData.longitude);
+  if (isValidCoordPair(latitude, longitude)) {
+    void enrichLocationAndWeather(vin, latitude, longitude, false);
+  }
 };

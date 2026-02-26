@@ -14,7 +14,7 @@
 > ✅ **X-HASH + X-HASH-2**: Dual-layer API signing is working on all telemetry endpoints.\
 > ✅ **MQTT Live Telemetry**: Real-time data streaming via AWS IoT Core (battery, doors, tires, location, speed).\
 > ✅ **Deployed**: Running on Cloudflare Pages with server-side proxy.\
-> ⚠️ **Limitation**: SOH (State of Health) battery data is **no longer available** in the API response.\
+> ✅ **SOH Data**: State of Health battery data is available again in the API response.\
 > 📚 **Documentation**: [API Endpoints](./docs/api/API_ENDPOINTS.md) | [X-HASH Technical Docs](./docs/api/HASH_ANALYSIS_SUMMARY.md) | [Reverse Engineering Report](./docs/api/REVERSE_ENGINEERING_REPORT.md) | [MQTT Telemetry](./docs/api/MQTT_TELEMETRY.md)\
 > 🌐 **Bilingual docs**: English at `docs/api/`, Vietnamese at `docs/api/vi/`
 

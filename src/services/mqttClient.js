@@ -118,10 +118,14 @@ export class MqttTelemetryClient {
   constructor() {
     this.client = null;
     this.vin = null;
+    this.subscribedVins = new Set();
+    this.subscribedTopics = new Set();
     this.credentials = null;
     this.credentialExpiry = 0;
+    this.endpointIndex = 0;
     this.heartbeatTimer = null;
     this.reconnectTimer = null;
+    this._reconnectAttempts = 0;
     this.onTelemetryUpdate = null;
     this.onConnected = null;
     this.pathToAlias = buildDeviceKeyToAlias(staticAliasMap);
@@ -130,22 +134,37 @@ export class MqttTelemetryClient {
   }
 
   async connect(vin) {
-    const connectToken = ++this._connectToken;
     if (this._destroyed) return;
-    if (this.client && this.vin === vin && this.client.connected) return;
+    if (!vin) return;
+
+    // Keep one physical MQTT connection alive when already connected.
+    // Switch VIN by updating subscriptions + active VIN only.
+    if (this.client && this.client.connected) {
+      if (this.vin === vin) return;
+
+      this._setActiveVin(vin);
+      return;
+    }
+
+    const connectToken = ++this._connectToken;
+
+    this._reconnectAttempts = 0;
+    this.endpointIndex = 0;
 
     if (this.client) {
-      this._cleanup();
+      this._cleanup(true);
     }
 
     this.vin = vin;
+    this.subscribedVins.add(vin);
     setMqttStatus("connecting");
 
     try {
       await this._ensureCredentials();
 
       const mqttConfig = MQTT_CONFIG[DEFAULT_REGION] || MQTT_CONFIG.vn;
-      await this._createClient(vin, mqttConfig.endpoint, mqttConfig, connectToken, true);
+      const mqttHost = this._nextMqttHost(mqttConfig);
+      await this._createClient(vin, mqttHost, mqttConfig, connectToken, true);
     } catch (e) {
       console.error("[MQTT] Connection failed:", e);
       setMqttStatus("error", e.message);
@@ -158,6 +177,17 @@ export class MqttTelemetryClient {
 
     if (this._destroyed || !this.vin) return;
     if (this.reconnectTimer) return;
+
+    this._reconnectAttempts += 1;
+    const delayMs = Math.min(
+      5000 * Math.pow(2, Math.min(this._reconnectAttempts - 1, 5)),
+      60000,
+    );
+
+    console.log(
+      `[MQTT] Reconnect attempt #${this._reconnectAttempts} in ${delayMs}ms`,
+    );
+    setMqttStatus("connecting");
 
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
@@ -180,14 +210,15 @@ export class MqttTelemetryClient {
 
         await this._ensureCredentials();
         const mqttConfig = MQTT_CONFIG[DEFAULT_REGION] || MQTT_CONFIG.vn;
+        const mqttHost = this._nextMqttHost(mqttConfig);
         const vin = this.vin;
-        await this._createClient(vin, mqttConfig.endpoint, mqttConfig, token, false);
+        await this._createClient(vin, mqttHost, mqttConfig, token, false);
       } catch (e) {
         console.error("[MQTT] Reconnect failed:", e);
         setMqttStatus("error", e.message);
         this._scheduleReconnect();
       }
-    }, 5000);
+    }, delayMs);
   }
 
   disconnect() {
@@ -198,7 +229,7 @@ export class MqttTelemetryClient {
     setMqttStatus("disconnected");
   }
 
-  _cleanup() {
+  _cleanup(preserveSubscriptions = false) {
     this._stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -211,6 +242,12 @@ export class MqttTelemetryClient {
       } catch {}
       this.client = null;
     }
+    if (!preserveSubscriptions) {
+      this.subscribedVins.clear();
+      this.subscribedTopics.clear();
+    }
+    this.endpointIndex = 0;
+    this._reconnectAttempts = 0;
     this.vin = null;
   }
 
@@ -219,40 +256,19 @@ export class MqttTelemetryClient {
   }
 
   async switchVin(newVin) {
-    // Fast path: already connected to this VIN
+    if (!newVin) return;
     if (this.vin === newVin && this.client?.connected) return;
 
-    const connectToken = ++this._connectToken;
     this._destroyed = false;
+    this.subscribedVins.add(newVin);
 
-    // Stop heartbeat + clear reconnect timer (but don't null vin yet)
-    this._stopHeartbeat();
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+    // If MQTT is already connected, avoid reconnect; just switch topic scope.
+    if (this.client?.connected) {
+      this._setActiveVin(newVin);
+      return;
     }
 
-    // Destroy old client
-    if (this.client) {
-      try {
-        this.client.removeAllListeners();
-        this.client.end(true);
-      } catch {}
-      this.client = null;
-    }
-
-    this.vin = newVin;
-    setMqttStatus("connecting");
-
-    try {
-      await this._ensureCredentials(); // Reuses cached creds (fast path)
-      const mqttConfig = MQTT_CONFIG[DEFAULT_REGION] || MQTT_CONFIG.vn;
-      await this._createClient(newVin, mqttConfig.endpoint, mqttConfig, connectToken, false);
-    } catch (e) {
-      console.error("[MQTT] Switch failed:", e);
-      setMqttStatus("error", e.message);
-      this._scheduleReconnect();
-    }
+    await this.connect(newVin);
   }
 
   async _ensureCredentials() {
@@ -331,16 +347,17 @@ export class MqttTelemetryClient {
 
     const onConnect = () => {
       if (this._connectToken !== connectToken || this._destroyed) return;
+      this._reconnectAttempts = 0;
       console.log(
         `[MQTT] ${isInitialConnect ? "Connected" : "Reconnected"} to`,
         mqttHost,
       );
       setMqttStatus("connected");
-      this._subscribe(vin);
+      this._restoreSubscriptions();
       this._startHeartbeat(vin, connectToken);
       if (typeof this.onConnected === "function") {
         console.log(`[MQTT] onConnected callback for ${vin}`);
-        this.onConnected(vin);
+        this.onConnected(this.vin);
       }
     };
 
@@ -410,6 +427,20 @@ export class MqttTelemetryClient {
     return this.client;
   }
 
+  _nextMqttHost(mqttConfig) {
+    const hosts = [mqttConfig.endpoint, mqttConfig.fallbackEndpoint]
+      .filter(Boolean)
+      .filter((host, index, arr) => arr.indexOf(host) === index);
+
+    if (hosts.length === 0) {
+      return mqttConfig.endpoint;
+    }
+
+    const host = hosts[this.endpointIndex % hosts.length];
+    this.endpointIndex = (this.endpointIndex + 1) % hosts.length;
+    return host;
+  }
+
   _getTopics(vin) {
     return [
       `/mobile/${vin}/push`,
@@ -418,17 +449,49 @@ export class MqttTelemetryClient {
     ];
   }
 
-  _subscribe(vin) {
+  _setActiveVin(vin) {
+    if (!vin) return;
+
+    const isVinChanged = this.vin !== vin;
+    this.vin = vin;
+    this.subscribedVins.add(vin);
+
+    this._subscribeForVin(vin);
+    this._startHeartbeat(vin, this._connectToken);
+    if (isVinChanged && typeof this.onConnected === "function") {
+      this.onConnected(vin);
+    }
+  }
+
+  _subscribeForVin(vin, { force = false } = {}) {
     if (!this.client) return;
 
     this._getTopics(vin).forEach((topic) => {
+      if (!force && this.subscribedTopics.has(topic)) return;
+
       this.client.subscribe(topic, { qos: 1 }, (err) => {
         if (err) {
           console.error(`[MQTT] Subscribe failed for ${topic}:`, err);
         } else {
           console.log(`[MQTT] Subscribed to ${topic}`);
+          this.subscribedTopics.add(topic);
         }
       });
+    });
+  }
+
+  _restoreSubscriptions() {
+    if (!this.client) return;
+
+    // Clean session is on, so subscriptions are reset when reconnecting.
+    this.subscribedTopics.clear();
+
+    if (this.subscribedVins.size === 0 && this.vin) {
+      this.subscribedVins.add(this.vin);
+    }
+
+    this.subscribedVins.forEach((vin) => {
+      this._subscribeForVin(vin, { force: true });
     });
   }
 
