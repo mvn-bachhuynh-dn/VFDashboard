@@ -14,7 +14,7 @@
 > ✅ **MQTT Live Telemetry**: Real-time data via AWS IoT Core (battery, doors, tires, location, speed, charging).\
 > ✅ **X-HASH + X-HASH-2**: Dual-layer API signing on all protected endpoints.\
 > ✅ **Multi-Vehicle**: Instant switching between vehicles with cached telemetry.\
-> ✅ **Charging History**: Full session history with smart filtering (PAGE_SIZE=2000).\
+> ✅ **Charging History**: Full session history with smart filtering.\
 > ✅ **Deep Scan**: Progressive telemetry viewer with crowdsourced KV aliases.\
 > 📚 **Documentation**: [API Endpoints](./docs/api/API_ENDPOINTS.md) | [X-HASH Technical Docs](./docs/api/HASH_ANALYSIS_SUMMARY.md) | [MQTT Telemetry](./docs/api/MQTT_TELEMETRY.md)\
 > 🌐 **Bilingual docs**: English at `docs/api/`, Vietnamese at `docs/api/vi/`
@@ -83,6 +83,10 @@ _Note: Requires Cloudflare authentication (`npx wrangler login`)._
 
 **This software is not affiliated with, endorsed by, or connected to VinFast Auto or its subsidiaries.**  
 It is an unofficial, open-source project created by the community for educational and personal use. Use at your own risk.
+
+## 🏗 System Architecture
+
+![System Architecture](docs/assets/system-architecture.svg)
 
 ## 📸 Screenshots
 
