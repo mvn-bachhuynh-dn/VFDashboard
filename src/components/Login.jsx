@@ -256,6 +256,18 @@ export default function Login({ bgImage }) {
           </form>
         </div>
 
+        {/* About / Community */}
+        <p className="relative text-center text-[11px] leading-relaxed text-white/70 px-2">
+          Dự án mã nguồn mở, phi lợi nhuận — chia sẻ đam mê công nghệ xe điện VinFast.
+          {" "}Giao lưu cùng tác giả tại sân chơi dành riêng cho chủ xe VF9:{" "}
+          <a
+            href="https://www.facebook.com/groups/706124277686588/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-white hover:text-blue-300 underline underline-offset-2 transition-colors"
+          >VF9 Club Vietnam</a>.
+        </p>
+
         {/* Footer: Github - Text - VF9 Club */}
         <div className="relative flex items-center justify-between px-6 py-4 bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           {/* Left: GitHub */}

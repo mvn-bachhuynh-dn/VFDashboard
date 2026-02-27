@@ -262,6 +262,8 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     const envKeys = [
       "BACKUP_PROXY_URL", "BACKUP_PROXY_URL_2", "BACKUP_PROXY_URL_3",
       "BACKUP_PROXY_URL_4", "BACKUP_PROXY_URL_5", "BACKUP_PROXY_URL_6",
+      "BACKUP_PROXY_URL_7", "BACKUP_PROXY_URL_8", "BACKUP_PROXY_URL_9",
+      "BACKUP_PROXY_URL_10", "BACKUP_PROXY_URL_11",
     ];
     const backupUrls = envKeys
       .map((k) => runtimeEnv[k] || (typeof process !== "undefined" ? process.env[k] : undefined))
