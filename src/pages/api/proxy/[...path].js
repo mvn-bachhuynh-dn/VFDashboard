@@ -229,34 +229,41 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     init.body = requestBody;
   }
 
-  // --- Direct fetch → on 429, immediately failover to shuffled backup proxies ---
+  // --- Direct fetch → on 429/5xx, failover to shuffled backup proxies ---
 
   let lastResponse = null;
   let lastData = null;
   const proxyLog = []; // Track all attempts for client-side debugging
 
-  // Phase 1: Direct to VinFast (no retry — fail fast)
-  try {
-    const t0 = Date.now();
-    console.log(`[Proxy] → ${request.method} ${targetUrl}`);
-    const fetchInit = { method: init.method, headers: { ...proxyHeaders } };
-    if (requestBody) fetchInit.body = requestBody;
+  // Phase 1: Direct to VinFast (retry once on 5xx)
+  const fetchInit = { method: init.method, headers: { ...proxyHeaders } };
+  if (requestBody) fetchInit.body = requestBody;
 
-    lastResponse = await fetch(targetUrl, fetchInit);
-    lastData = await lastResponse.text();
-    const elapsed = Date.now() - t0;
-    proxyLog.push({ via: "direct", status: lastResponse.status, ms: elapsed });
-    console.log(`[Proxy] ← direct ${lastResponse.status} (${elapsed}ms)`);
-  } catch (e) {
-    console.error(`[Proxy Error] ${request.method} /${apiPath}:`, e);
-    return new Response(JSON.stringify({ error: "Internal Proxy Error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const t0 = Date.now();
+      if (attempt === 0) console.log(`[Proxy] → ${request.method} ${targetUrl}`);
+      lastResponse = await fetch(targetUrl, fetchInit);
+      lastData = await lastResponse.text();
+      const elapsed = Date.now() - t0;
+      proxyLog.push({ via: attempt === 0 ? "direct" : "direct-retry", status: lastResponse.status, ms: elapsed });
+      console.log(`[Proxy] ← direct${attempt > 0 ? " retry" : ""} ${lastResponse.status} (${elapsed}ms)`);
+      if (lastResponse.status < 500) break; // Success or client error → stop
+      if (attempt === 0) console.warn(`[Proxy] 5xx — retrying once...`);
+    } catch (e) {
+      if (attempt === 1) {
+        console.error(`[Proxy Error] ${request.method} /${apiPath}:`, e);
+        return new Response(JSON.stringify({ error: "Internal Proxy Error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      proxyLog.push({ via: "direct", status: "error", error: e.message });
+    }
   }
 
-  // Phase 2: If 429, immediately try backup proxies in random order
-  if (lastResponse.status === 429) {
+  // Phase 2: If 429 or 5xx, try backup proxies in random order
+  if (lastResponse.status === 429 || lastResponse.status >= 500) {
     const runtimeEnv = locals?.runtime?.env || import.meta.env || {};
 
     const envKeys = [
@@ -301,7 +308,7 @@ export const ALL = async ({ request, params, cookies, locals }) => {
         proxyLog.push({ via: label, status: backupResponse.status, ms: elapsed });
         console.log(`[Proxy] ← ${label} ${backupResponse.status} (${elapsed}ms)`);
 
-        if (backupResponse.status !== 429) {
+        if (backupResponse.status !== 429 && backupResponse.status < 500) {
           return new Response(backupData, {
             status: backupResponse.status,
             headers: {
@@ -318,7 +325,7 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     }
   }
 
-  const servedBy = proxyLog.length > 1 ? `direct+${proxyLog.length - 1} backups (all 429)` : "direct";
+  const servedBy = proxyLog.length > 1 ? `direct+${proxyLog.length - 1} backups (all failed)` : "direct";
   console.log(
     `[Proxy] ← ${lastResponse.status} (${lastData.length} bytes) for ${request.method} /${apiPath} [${servedBy}]`,
   );
