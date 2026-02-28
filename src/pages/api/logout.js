@@ -14,8 +14,7 @@ export const POST = async ({ request, cookies }) => {
   cookies.set("refresh_token", "", clearOpts);
   cookies.set("vf_region", "", { path: "/", maxAge: 0 });
 
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  const responseObj = new Response(JSON.stringify({ success: true }));
+  responseObj.headers.set("Content-Type", "application/json");
+  return responseObj;
 };

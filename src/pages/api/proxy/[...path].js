@@ -44,10 +44,11 @@ function generateXHash(method, apiPath, vin, timestamp, secretKey) {
   parts.push(String(timestamp));
 
   const message = parts.join("_").toLowerCase();
+  console.log(`[Proxy] X-HASH Message: ${message}`);
 
   const hmac = crypto.createHmac("sha256", secretKey);
   hmac.update(message);
-  return hmac.digest("base64");
+  return { hash: hmac.digest("base64"), message };
 }
 
 /**
@@ -102,12 +103,13 @@ function generateXHash2({
 
   // Native code: toLower the entire assembled string
   const message = parts.join("_").toLowerCase();
+  console.log(`[Proxy] X-HASH-2 Message: ${message}`);
 
   // HMAC-SHA256 with native key (from libsecure.so char-by-char build)
   const hash2Key = "ConnectedCar@6521";
   const hmac = crypto.createHmac("sha256", hash2Key);
   hmac.update(message);
-  return hmac.digest("base64");
+  return { hash: hmac.digest("base64"), message };
 }
 
 export const ALL = async ({ request, params, cookies, locals }) => {
@@ -171,9 +173,21 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     Authorization: `Bearer ${accessToken}`,
   };
 
+  const init = {
+    method: request.method,
+    headers: proxyHeaders,
+  };
+  if (requestBody) {
+    init.body = requestBody;
+  }
+
+  let secretKey;
+  let timestamp;
+  let xTimestamp;
+
   if (requiresSigning) {
     const runtimeEnv = locals?.runtime?.env || import.meta.env || {};
-    let secretKey =
+    secretKey =
       runtimeEnv.VINFAST_XHASH_SECRET ||
       (typeof process !== "undefined"
         ? process.env.VINFAST_XHASH_SECRET
@@ -197,18 +211,19 @@ export const ALL = async ({ request, params, cookies, locals }) => {
       );
     }
 
-    const timestamp = Date.now();
-    const xTimestamp = String(timestamp);
+    timestamp = Date.now();
+    xTimestamp = String(timestamp);
 
-    const xHash = generateXHash(
+    const xHashResult = generateXHash(
       request.method,
       apiPath,
       vinHeader,
       timestamp,
       secretKey,
     );
+    const xHash = xHashResult.hash;
 
-    const xHash2 = generateXHash2({
+    const xHash2Result = generateXHash2({
       platform: API_HEADERS["X-Device-Platform"] || "android",
       vinCode: vinHeader || null,
       identifier: API_HEADERS["X-Device-Identifier"] || "",
@@ -216,26 +231,19 @@ export const ALL = async ({ request, params, cookies, locals }) => {
       method: request.method,
       timestamp: xTimestamp,
     });
+    const xHash2 = xHash2Result.hash;
 
     proxyHeaders["X-HASH"] = xHash;
     proxyHeaders["X-HASH-2"] = xHash2;
     proxyHeaders["X-TIMESTAMP"] = xTimestamp;
-    console.log(
-      `[Proxy] Signed ${request.method} /${apiPath} with X-HASH + X-HASH-2`,
-    );
+
+    // Store messages for debug header insertion
+    init._debugHashMessage = xHashResult.message;
+    init._debugHash2Message = xHash2Result.message;
   }
 
   if (vinHeader) proxyHeaders["X-Vin-Code"] = vinHeader;
   if (playerHeader) proxyHeaders["X-Player-Identifier"] = playerHeader;
-
-  const init = {
-    method: request.method,
-    headers: proxyHeaders,
-  };
-
-  if (requestBody) {
-    init.body = requestBody;
-  }
 
   // --- Direct fetch → on 429/5xx, failover to shuffled backup proxies ---
 
@@ -256,8 +264,29 @@ export const ALL = async ({ request, params, cookies, locals }) => {
       const elapsed = Date.now() - t0;
       proxyLog.push({ via: attempt === 0 ? "direct" : "direct-retry", status: lastResponse.status, ms: elapsed });
       console.log(`[Proxy] ← direct${attempt > 0 ? " retry" : ""} ${lastResponse.status} (${elapsed}ms)`);
-      if (lastResponse.status < 500) break; // Success or client error → stop
-      if (attempt === 0) console.warn(`[Proxy] 5xx — retrying once...`);
+
+      // Automatic Signature Fallback: If 403 on a signed path, try alternate signature format
+      if (lastResponse.status === 403 && requiresSigning && attempt === 0) {
+        console.warn(`[Proxy] 403 Signature Error — retrying without X-HASH-2 and with query string...`);
+
+        // 1. App new versions might not use X-HASH-2 anymore
+        delete fetchInit.headers["X-HASH-2"];
+
+        // 2. Try including query string in XPATH
+        const searchParams = urlObj.searchParams.toString();
+        const pathWithQuery = searchParams ? `${apiPath}?${searchParams}` : apiPath;
+
+        const altXHashResult = generateXHash(request.method, pathWithQuery, vinHeader, timestamp, secretKey);
+        fetchInit.headers["X-HASH"] = altXHashResult.hash;
+        init._debugHashMessageAlt = altXHashResult.message;
+
+        // Also capture message without VIN just in case
+        init._debugHashMessageAlt2 = generateXHash(request.method, pathWithQuery, null, timestamp, secretKey).message;
+
+        continue;
+      }
+
+      if (lastResponse.status < 500) break; // Success or non-retryable error
     } catch (e) {
       if (attempt === 1) {
         console.error(`[Proxy Error] ${request.method} /${apiPath}:`, e);
@@ -338,10 +367,11 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     `[Proxy] ← ${lastResponse.status} (${lastData.length} bytes) for ${request.method} /${apiPath} [${servedBy}]`,
   );
   if (lastResponse.status >= 400) {
-    console.log(`[Proxy] Error body: ${lastData.substring(0, 500)}`);
+    console.warn(`[Proxy] Response ${lastResponse.status} for ${request.method} ${targetUrl}`);
+    console.log(`[Proxy] Error body: ${lastData.substring(0, 1000)}`);
   }
 
-  return new Response(lastData, {
+  const response = new Response(lastData, {
     status: lastResponse.status,
     headers: {
       "Content-Type": "application/json",
@@ -349,4 +379,17 @@ export const ALL = async ({ request, params, cookies, locals }) => {
       "X-Proxy-Log": JSON.stringify(proxyLog),
     },
   });
+
+  if (init._debugHashMessage) {
+    response.headers.set("X-Debug-Hash-Msg", init._debugHashMessage);
+    response.headers.set("X-Debug-Hash2-Msg", init._debugHash2Message || "");
+  }
+  if (init._debugHashMessageAlt) {
+    response.headers.set("X-Debug-Hash-Msg-Alt", init._debugHashMessageAlt);
+    if (init._debugHashMessageAlt2) {
+      response.headers.set("X-Debug-Hash-Msg-Alt2", init._debugHashMessageAlt2);
+    }
+  }
+
+  return response;
 };
