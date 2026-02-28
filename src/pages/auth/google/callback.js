@@ -1,15 +1,20 @@
 export const prerender = false;
 
-export const GET = async ({ url, cookies, redirect, locals }) => {
+export const GET = async ({ url, cookies, locals, redirect }) => {
     const code = url.searchParams.get("code");
-    const runtimeEnv = locals?.runtime?.env || import.meta.env || {};
+    const runtimeEnv = locals?.runtime?.env || {};
 
-    const GOOGLE_CLIENT_ID = runtimeEnv.GOOGLE_CLIENT_ID || (typeof process !== "undefined" ? process.env.GOOGLE_CLIENT_ID : undefined);
-    const GOOGLE_CLIENT_SECRET = runtimeEnv.GOOGLE_CLIENT_SECRET || (typeof process !== "undefined" ? process.env.GOOGLE_CLIENT_SECRET : undefined);
+    const GOOGLE_CLIENT_ID = runtimeEnv.GOOGLE_CLIENT_ID;
+    const GOOGLE_CLIENT_SECRET = runtimeEnv.GOOGLE_CLIENT_SECRET;
     const kv = runtimeEnv.VFDashboard;
 
-    if (!code || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-        return redirect("/auth/google?error=config_missing");
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+        console.error("[GoogleAuth] Missing environment variables");
+        return new Response("Auth Configuration Error", { status: 500 });
+    }
+
+    if (!code) {
+        return redirect("/auth/google?error=no_code");
     }
 
     try {
@@ -31,7 +36,7 @@ export const GET = async ({ url, cookies, redirect, locals }) => {
 
         const tokens = await tokenResponse.json();
         if (!tokens.access_token) {
-            console.error("Failed to get access token", tokens);
+            console.error("[GoogleAuth] Token exchange failed", tokens);
             return redirect("/auth/google?error=token_failed");
         }
 
@@ -47,38 +52,32 @@ export const GET = async ({ url, cookies, redirect, locals }) => {
         }
 
         // 3. Whitelist check via Cloudflare KV
-        // Key format: whitelist:email@gmail.com
         let isWhitelisted = false;
         if (kv) {
-            const whitelistKey = `whitelist:${email.toLowerCase()}`;
-            const entry = await kv.get(whitelistKey);
+            const entry = await kv.get(`whitelist:${email.toLowerCase()}`);
             if (entry !== null) {
                 isWhitelisted = true;
             }
-        } else {
-            // In DEV or if KV is missing, we might want a fallback or stricter behavior
-            console.warn("KV VFDashboard not found, denying access by default.");
         }
 
         if (!isWhitelisted) {
-            console.warn(`Access denied for: ${email}`);
+            console.warn(`[GoogleAuth] Denied: ${email}`);
             return redirect("/auth/restricted?email=" + encodeURIComponent(email));
         }
 
-        // 4. Success -> Set Session Cookie
-        // In a real app, sign this token or use a session store. 
-        // For this dashboard, we just set a simple token.
+        // 4. Success -> Set Session Cookie and Redirect
+        // Using cookies.set and then returning redirect()
         cookies.set("gatekeeper_token", "authorized", {
             path: "/",
             httpOnly: true,
-            secure: url.protocol === "https:",
+            secure: true,
             sameSite: "lax",
-            maxAge: 60 * 60 * 24 * 7, // 1 week
+            maxAge: 60 * 60 * 24 * 7,
         });
 
         return redirect("/");
     } catch (e) {
         console.error("OAuth Callback Error:", e);
-        return redirect("/auth/google?error=internal_error");
+        return new Response("Internal Authentication Error", { status: 500 });
     }
 };

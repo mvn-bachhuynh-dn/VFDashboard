@@ -22,5 +22,8 @@ export const GET = async ({ redirect, locals, url }) => {
     googleAuthUrl.searchParams.set("access_type", "online");
     googleAuthUrl.searchParams.set("prompt", "select_account");
 
-    return redirect(googleAuthUrl.toString());
+    return new Response(null, {
+        status: 302,
+        headers: { Location: googleAuthUrl.toString() },
+    });
 };
