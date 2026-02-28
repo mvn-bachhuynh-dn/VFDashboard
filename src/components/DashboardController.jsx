@@ -50,6 +50,8 @@ export default function DashboardController({ vin: initialVin }) {
       // Register core aliases to trigger T-Box data push (1 API call)
       const coreResources = buildCoreResources();
       const regStart = performance.now();
+      // Temporary: list_resource returns 403. Dash acts passively now.
+      /*
       api.registerResources(connectedVin, coreResources).then(() => {
         const ms = (performance.now() - regStart).toFixed(0);
         console.log(
@@ -57,6 +59,7 @@ export default function DashboardController({ vin: initialVin }) {
           "color:#3b82f6;font-weight:bold",
         );
       });
+      */
     };
 
     const init = async () => {

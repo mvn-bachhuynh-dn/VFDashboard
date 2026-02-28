@@ -95,10 +95,9 @@ export const POST = async ({ request, cookies, locals }) => {
     if (!response.ok) {
       cookies.delete("access_token", { path: "/" });
       cookies.delete("refresh_token", { path: "/" });
-      return new Response(JSON.stringify(data), {
-        status: response.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      const responseObj = new Response(JSON.stringify(data), { status: response.status });
+      responseObj.headers.set("Content-Type", "application/json");
+      return responseObj;
     }
 
     // Calculate token expiry
@@ -123,10 +122,9 @@ export const POST = async ({ request, cookies, locals }) => {
       cookies.set("refresh_token", data.refresh_token, cookieOptions);
     }
 
-    return new Response(JSON.stringify({ success: true, tokenExpiresAt }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    const responseObj = new Response(JSON.stringify({ success: true, tokenExpiresAt }));
+    responseObj.headers.set("Content-Type", "application/json");
+    return responseObj;
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message || "Internal Server Error" }),

@@ -142,16 +142,13 @@ export const POST = async ({ request, cookies, locals }) => {
       ? authLog[authLog.length - 1].via
       : "direct";
 
-    return new Response(
-      JSON.stringify({ success: true, region, tokenExpiresAt, _authLog: authLog }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "X-Auth-Route": servedBy,
-        },
-      },
+    const responseObj = new Response(
+      JSON.stringify({ success: true, region, tokenExpiresAt, _authLog: authLog })
     );
+    responseObj.headers.set("Content-Type", "application/json");
+    responseObj.headers.set("X-Auth-Route", servedBy);
+
+    return responseObj;
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message || "Internal Server Error" }),

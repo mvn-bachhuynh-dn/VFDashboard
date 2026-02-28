@@ -1,7 +1,23 @@
 export const prerender = false;
 
-export const GET = async ({ locals }) => {
+export const GET = async ({ locals, cookies, url }) => {
     const runtimeEnv = locals?.runtime?.env || {};
+    const kv = runtimeEnv.VFDashboard;
+
+    // Test cookie setting
+    const setTest = url.searchParams.get("setTestCookie");
+    if (setTest) {
+        cookies.set("diag_test_cookie", "works_" + Date.now(), {
+            path: "/",
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax",
+            maxAge: 60 * 5 // 5 mins
+        });
+    }
+
+    const accessToken = cookies.get("access_token")?.value;
+    const testCookie = cookies.get("diag_test_cookie")?.value;
 
     const requiredVars = [
         "GOOGLE_CLIENT_ID",
@@ -12,20 +28,43 @@ export const GET = async ({ locals }) => {
         "BACKUP_PROXY_URL_3"
     ];
 
-    const status = {};
+    const envStatus = {};
     requiredVars.forEach(v => {
         const val = runtimeEnv[v] || (typeof process !== 'undefined' ? process.env[v] : undefined);
-        status[v] = {
+        envStatus[v] = {
             exists: !!val,
             length: val ? val.length : 0,
-            prefix: val ? val.substring(0, 3) + "..." : null
+            isDefault: val === "Vinfast@2025"
         };
     });
 
+    let kvStatus = "untested";
+    let kvKeys = [];
+    if (kv) {
+        try {
+            const list = await kv.list({ limit: 5 });
+            kvStatus = "ok";
+            kvKeys = list.keys.map(k => k.name);
+        } catch (e) {
+            kvStatus = "error: " + e.message;
+        }
+    } else {
+        kvStatus = "missing binding";
+    }
+
     return new Response(JSON.stringify({
-        env: status,
+        env: envStatus,
+        kv: {
+            status: kvStatus,
+            keys: kvKeys
+        },
+        session: {
+            hasToken: !!accessToken,
+            tokenLength: accessToken ? accessToken.length : 0,
+            testCookieStatus: testCookie || (setTest ? "setting..." : "not set")
+        },
         timestamp: new Date().toISOString(),
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server'
+        node_version: typeof process !== 'undefined' ? process.version : 'unknown'
     }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
