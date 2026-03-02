@@ -262,12 +262,12 @@ export class MqttTelemetryClient {
 
     try {
       this.client.removeAllListeners();
-    } catch {}
+    } catch { }
 
     const nextToken = ++this._connectToken;
     try {
       this.client.end(true);
-    } catch {}
+    } catch { }
     this.client = null;
     return nextToken;
   }
@@ -286,6 +286,49 @@ export class MqttTelemetryClient {
     }
 
     await this.connect(newVin);
+  }
+
+  /**
+   * Call this when the browser tab becomes visible again (e.g., user switches
+   * back from the VinFast app on iOS). iOS aggressively suspends background
+   * tabs and kills WebSocket connections silently. This method detects the
+   * dead connection and forces an immediate reconnect, bypassing backoff.
+   */
+  async resumeFromBackground() {
+    if (this._destroyed || !this.vin) return;
+
+    // If already connected and alive, no action needed.
+    if (this.client?.connected) {
+      console.log("[MQTT] resumeFromBackground: still connected, no action needed.");
+      return;
+    }
+
+    console.warn("[MQTT] resumeFromBackground: connection lost in background — reconnecting immediately...");
+    setMqttStatus("connecting");
+
+    // Cancel any pending exponential backoff timer to reconnect NOW.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    // Force close the dead connection cleanly before opening a new one.
+    this._closeCurrentConnection();
+    this._reconnectAttempts = 0; // Reset backoff counter for instant reconnect.
+
+    const vin = this.vin;
+    try {
+      await this._ensureCredentials(); // Fast path: uses cache if still valid.
+      const mqttConfig = MQTT_CONFIG[DEFAULT_REGION] || MQTT_CONFIG.vn;
+      const mqttHost = this._nextMqttHost(mqttConfig);
+      const connectToken = ++this._connectToken;
+      await this._createClient(vin, mqttHost, mqttConfig, connectToken, false);
+      console.log("[MQTT] resumeFromBackground: reconnected successfully.");
+    } catch (e) {
+      console.error("[MQTT] resumeFromBackground: reconnect failed:", e);
+      setMqttStatus("error", e.message);
+      this._scheduleReconnect(); // Fall back to normal backoff on failure.
+    }
   }
 
   async _ensureCredentials() {

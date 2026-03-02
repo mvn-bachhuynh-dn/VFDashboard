@@ -120,6 +120,37 @@ export default function DashboardController({ vin: initialVin }) {
     };
   }, [initialVin]);
 
+  // iOS Background Resume Fix
+  // iOS Safari aggressively suspends background tabs and silently kills WebSocket
+  // connections. When the user switches to the VinFast app to wake the car and
+  // then returns, we must immediately reconnect MQTT to catch the data push window.
+  useEffect(() => {
+    const mqttClient = getMqttClient();
+
+    const handleResume = () => {
+      if (!isMounted.current) return;
+      if (document.visibilityState === "visible") {
+        console.log("[iOS] Tab resumed — checking MQTT connection...");
+        mqttClient.resumeFromBackground();
+      }
+    };
+
+    const handleFocus = () => {
+      if (!isMounted.current) return;
+      // Fallback: some iOS browsers trigger focus but not visibilitychange
+      console.log("[iOS] Window focused — checking MQTT connection...");
+      mqttClient.resumeFromBackground();
+    };
+
+    document.addEventListener("visibilitychange", handleResume);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleResume);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []); // Mount once — mqttClient is a singleton
+
   // No REST polling — all telemetry comes from MQTT.
 
   return null; // Headless
